@@ -2,9 +2,9 @@
 
 Three controllers on Ubuntu 24.04, Cinder LVM, Ansible, Terraform, an application, and monitoring.
 
-**Current step: Stage 1 — understand the partial Hermes tool installation.** Python tools installed, but Ansible collection setup stopped because the installer had not added the new environment to PATH. [Read what installed, why and where](docs/01-openstack-foundation.md#what-actually-installed-on-hermes). No retry is requested at this checkpoint. OpenStack has not been deployed in this rebuild.
+**Current step: Stage 1 — finish Ansible collections on Hermes.** Python tools installed; collection setup stopped at the command-search PATH error. The recovery uses those installed tools and completes the missing collections/checks. [Read the short lesson and resume command](docs/01-openstack-foundation.md#resume-collections-on-hermes). OpenStack has not been deployed in this rebuild.
 
-**Latest result:** Hermes installed Ansible **2.20.10**, Kolla-Ansible **22.2.1.dev24**, OpenStack client **10.4.0**, PyYAML **6.0.3** and supporting libraries in `~/venvs/kolla-iac`; pip and system certificates were updated. Collection installation stopped before doctor. The PATH correction is published but has not run on Hermes. [The successful all-node USB test remains recorded](docs/00-hermes-codex-and-node-reset.md#observed-usb-link-results).
+**Latest observed result:** Hermes installed Ansible **2.20.10**, Kolla-Ansible **22.2.1.dev24**, OpenStack client **10.4.0**, PyYAML **6.0.3** and dependencies in `~/venvs/kolla-iac`. Collection installation stopped before doctor. The recovery is locally checked; its actual Hermes result is pending. [The successful all-node USB test remains recorded](docs/00-hermes-codex-and-node-reset.md#observed-usb-link-results).
 
 **Confirmed by Joe:** same mini switch/LAN `192.168.0.0/24`, DHCP `.2–.149`, `.100` reserved, and no static devices in `.150–.199`. He explicitly offers `.150/.151/.152`; final pool size still needs a choice because all current workloads together need five external addresses. The `.100` DHCP binding/current lease remain unspecified. [Read the ping interpretation and IP budget](docs/00-hermes-codex-and-node-reset.md#reviewed-windows-ping-and-address-budget).
 
@@ -43,7 +43,7 @@ Follow this table **from top to bottom**, reviewing the result at each stop. Com
 | 1 · Stage 0 — **done** | Ubuntu install, discovery and `check-storage.sh` | Establish actual host, disk and NIC identities | Three reports reviewed; IPs preserved |
 | 2 · Stage 0 — **done** | `reset-ceph.sh` removed the recorded allocations | Release SATA disks retained by the old deployment | All three report CLEANED; Ubuntu backing unchanged |
 | 3 · Stage 0 — **links done; allocation details pending** | Record no static users in `.150–.199`; settle pool size and `.100` DHCP binding | Three external IPs are smaller than the five-address coexistence budget | No repeat ping/link test; final cloud inputs wait for the outstanding facts |
-| 4 · Stage 1 — **partial; review now** | Python tools installed; collection setup stopped at a PATH defect | Understand the installed packages and failure before retrying | Python tools present; collections incomplete, doctor not reached; repair not yet run on Hermes |
+| 4 · Stage 1 — **resume now** | `bash scripts/prepare-hermes.sh --resume-collections` after reading its lesson | Use existing tools to install the missing collections and run checks | Review `build/hermes-tools-summary.txt`; corrected Hermes run pending |
 | 5 · Stages 1 + 2 | Review `private/lab.yml`; prepare Hermes SSH-key access; `labctl configure --hosts-only`, `preflight`, `base` | Give Ansible verified values and a repeatable Ubuntu baseline | Correct three-node inventory, SSH and time service |
 | 6 · Stages 1 + 2 | `labctl netplan`, then the console procedure in Stage 2, one node at a time | Bind each USB MAC to `ext0` and retain the original management address | SSH, DNS, default route and provider link checked |
 | 7 · Stage 1 | `labctl --ask-become-pass storage` | Create **one** `cinder-volumes` VG on the reviewed blank node3 SATA disk | node3 SATA owns Cinder; Ubuntu VG stays separate |
@@ -102,7 +102,7 @@ For `first`, `app` or `monitor`, run `python scripts/labctl.py terraform NAME AC
 | Hermes public-key access to `joe` on all nodes | Password-only discovery does not establish unattended Ansible SSH |
 | Non-overlapping tenant CIDRs, HCP organization/workspaces and scoped cloud credentials | These depend on your network and accounts |
 
-**Current checkpoint: review row 4's partial result.** Read [what actually installed](docs/01-openstack-foundation.md#what-actually-installed-on-hermes). This review does not ask for a repeat installation, network test or deployment. Cloud/node configuration still waits for reviewed inputs.
+**Current checkpoint: row 4.** Read [Resume collections on Hermes](docs/01-openstack-foundation.md#resume-collections-on-hermes), then run its one recovery command and review the short summary. Cloud/node configuration still waits for reviewed inputs.
 
 <details>
 <summary>Reference: first checkout and initial discovery</summary>

@@ -1,6 +1,54 @@
 # Stage 1 — Three controllers, two computes, one Cinder LVM host
 
-**Current checkpoint:** Hermes installed the Python tools, then stopped while installing Ansible collections. Start with [what actually installed and why](#what-actually-installed-on-hermes). No new command is needed to understand this result.
+**Current checkpoint:** Python tools are installed on Hermes. Ansible collections remain incomplete. Continue with the recovery step below; review its result before configuring nodes.
+
+## 1. Finish the Hermes tool setup
+
+### Resume collections on Hermes
+
+**Why this step?** The previous run installed Ansible, Kolla-Ansible and the OpenStack client, then stopped because Kolla could not find `ansible-galaxy`. The recovery adds the installed environment to PATH before calling it.
+
+**What is a collection?** A bundle of Ansible modules, roles and plugins. Ansible is the engine; collections provide additional tasks it can run later.
+
+| Collections to install | Purpose |
+|---|---|
+| `openstack.kolla` | Kolla's shared OpenStack deployment roles/modules |
+| `ansible.netcommon`, `ansible.utils`, `ansible.posix` | Network utilities and Linux administration modules |
+| `community.crypto`, `community.general` | Certificate and general administration modules |
+| `community.docker`, `containers.podman` | Modules for managing container engines |
+| `community.postgresql` | Modules for the later PostgreSQL lesson |
+
+They install on **Hermes**, under **`~/git/openstack-iac-lab/build/collections`**. These are task libraries: this step does not install PostgreSQL or container engines on the nodes. The Kolla requirements come from the installed pinned release; the project adds its requirements from `ansible/requirements.yml`. Resolved collection versions will be listed in the log.
+
+| Script action | Effect |
+|---|---|
+| Use `~/venvs/kolla-iac/bin` on PATH | Make Kolla and its child `ansible-galaxy` discover the same installed tools |
+| Install Kolla and project collections | Finish the interrupted downloads; skip APT, venv creation and `pip install` |
+| Check Python dependencies and run doctor | Check installed package consistency and executable locations |
+
+**Run on Hermes:**
+
+```bash
+cd ~/git/openstack-iac-lab
+git pull --ff-only
+bash scripts/prepare-hermes.sh --resume-collections
+cat build/hermes-tools-summary.txt
+```
+
+The last line only displays the short report. Resume mode uses no sudo and makes no node or cloud configuration changes. Downloads may take several minutes. It stops on a failed collection/dependency command rather than continuing into deployment.
+
+**Read the short result:** `build/hermes-tools-summary.txt`. The full log remains `build/hermes-tools-report.txt`; timestamped history includes `python-versions.txt`.
+
+| Result | Meaning |
+|---|---|
+| Collection/check lines say `COMPLETED`, then `RESULT: TOOLS_FOUND` | Installation and the listed tool-location checks passed; deployment has not started |
+| `RESULT: REVIEW` | Read the actual `MISSING` entry; Terraform is needed by Stage 3 |
+| `STOPPED` or expected executable missing | Read the failed phase/error in the full log before another attempt |
+
+**Checkpoint:** share the short summary. The resume path has local fixture tests; a successful corrected run on Hermes has not yet been observed. After a passing report, the next lesson is preparing Ansible SSH access and reviewed host configuration.
+
+<details>
+<summary>Earlier lesson: controller architecture, installed packages and the reviewed PATH failure</summary>
 
 ## Understand the roles first
 
@@ -62,7 +110,7 @@ The [bootstrap script](../scripts/bootstrap-hermes.sh) now exports the environme
 
 **Scope of this run:** it installed/updated software on Hermes. The script did not SSH to node1/node2/node3, change their networking or disks, install cloud services there, create VMs, or install Codex. Terraform was not installed by this script. No cluster deployment was attempted.
 
-**Where we are:** Python tools installed; collections incomplete; doctor not run. Review this explanation before any retry. There is no new execution instruction at this checkpoint.
+**Outcome of that run:** Python tools installed; collections incomplete; doctor not run. The current recovery command is in [Resume collections on Hermes](#resume-collections-on-hermes).
 
 ### Next run: prepare the tools on Hermes
 
@@ -147,6 +195,8 @@ chmod 600 "$LAB_CONFIG/passwords.yml"
 ```
 
 Merge the reviewed values from `kolla/globals.yml.example` into the new globals file. Each command below passes `--configdir` explicitly. Old Ceph overrides and custom images are not inputs to this deployment.
+
+</details>
 
 </details>
 

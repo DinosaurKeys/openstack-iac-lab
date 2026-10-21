@@ -64,7 +64,7 @@ def render(text):
     groups['cinder-backup'] = {'children': {'storage': {}}}
     node_hosts = {f'node{i}': {'ansible_host': f'192.168.0.{199+i}'}
                   for i in range(1, 4)}
-    result = {'all': {'vars': {'ansible_user': 'openstack',
+    result = {'all': {'vars': {'ansible_user': 'joe',
                                 'ansible_become': True,
                                 'ansible_python_interpreter': '/usr/bin/python3'},
                       'hosts': node_hosts, 'children': groups}}

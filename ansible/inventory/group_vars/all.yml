@@ -1,5 +1,6 @@
 ---
-ansible_user: openstack
+# Confirmed Ubuntu login account on all three reinstalled nodes.
+ansible_user: joe
 ansible_python_interpreter: /usr/bin/python3
 ansible_become: true
 management_interface: enp0s31f6

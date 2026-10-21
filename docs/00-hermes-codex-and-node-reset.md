@@ -46,6 +46,10 @@ bash scripts/discover.sh joe
 
 If usernames differ, run the collector separately for each IP with its actual username. You can also use `python scripts/labctl.py discover --ssh-user joe 192.168.0.200`. Discovery skips privileged disk details if passwordless sudo is unavailable; ordinary hardware/network reports are still collected. A failed connection prints the account/IP and exits unsuccessfully; any report for that failed node may be incomplete.
 
+The user's discovery reports from 2026-10-21 confirm successful `joe` logins on all three nodes, Ubuntu 24.04.5 LTS, preserved management IPs on enp0s31f6, gateway and configured DNS 192.168.0.1, synchronized clocks, and the presence of /dev/kvm. Both preparation and generated Kolla inventories now use `joe`.
+
+The NVMe disks hold Ubuntu, with 100 GiB root logical volumes. Each separate 223.6 GiB SATA disk still contains an old Ceph LVM volume. Reinstalling the OS did not erase those separate data disks. Storage ownership/mount inspection and SMART health review remain pending before selecting exact cleanup commands or preparing Cinder. The USB provider interfaces are administratively DOWN; their physical link has not yet been tested. No storage cleanup, Netplan change, or OpenStack deployment has been performed in this rebuild.
+
 Record the current OS/NIC/disk information before reinstalling when possible. If the reinstalls are already complete, collect the fresh layout now; do not reinstall again merely to run discovery. The script only inspects the nodes.
 
 Make a private record with one row per disk: host, model, serial, stable by-id path, size, current partitions/mounts, intended OS/data use. The old README reports prior disk-health findings; a new use as Cinder storage does not make an unhealthy disk safe.
@@ -57,7 +61,7 @@ Before reuse, run read-only SMART reporting for each **identified** physical dat
 1. Download Ubuntu Server 24.04 LTS from [Ubuntu](https://ubuntu.com/download/server) and verify the published image checksum.
 2. Boot the USB installer. Choose the intended node's **OS disk by model/serial**. Recreate its OS layout. Check that the installer is not selecting the separate data disk.
 3. Set the hostname and static management address from the table below. The recorded gateway was 192.168.0.1; verify the router address. Use verified DNS servers from the existing network.
-4. Create a normal user, enable OpenSSH, and retain normal sudo access. Record the exact username. The Ansible examples currently default to `openstack`, but an existing `joe` account can be used by matching the inventory's `ansible_user` to it before Ansible runs. Do not reinstall or create another account just to run discovery. Do not copy a shared SSH host key or machine-id between nodes.
+4. Create a normal user, enable OpenSSH, and retain normal sudo access. The completed rebuild uses `joe` on all three nodes, and both Ansible inventories use that confirmed account. If a future rebuild chooses another name, update the inventory source and Kolla inventory generator before running Ansible. Do not reinstall or create another account just to run discovery. Do not copy a shared SSH host key or machine-id between nodes.
 5. Reboot, remove the installer, and inspect disk/mount/network state again.
 
 | Hostname | Management IP |

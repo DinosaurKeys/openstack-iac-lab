@@ -72,7 +72,7 @@ Test SSH, the default route, DNS, and the expected interface addresses from anot
 
 ## 4. Sudo and Kolla
 
-Fresh `openstack` users can retain password-based sudo. Regular ansible-playbook commands use `--ask-become-pass`. Kolla's selected Python CLI does not expose that same flag; use Ansible's environment setting when needed:
+The confirmed account is `joe` on all three reinstalled nodes; both preparation and generated Kolla inventories use it. Discovery succeeded with SSH passwords. The report's "passwordless sudo is unavailable" message is expected with normal Ubuntu sudo and is not a discovery failure. Regular ansible-playbook commands use `--ask-become-pass` for sudo; unattended SSH access must be prepared separately before running them. Kolla's selected Python CLI does not expose that same flag; use Ansible's environment setting when needed:
 
 ```bash
 export ANSIBLE_BECOME_ASK_PASS=True

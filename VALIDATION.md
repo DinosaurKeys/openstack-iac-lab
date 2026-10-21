@@ -9,7 +9,8 @@ This repository contains implementation code and learning guides. The user has c
 - Checked all Ansible playbooks with ansible-playbook --syntax-check.
 - Exercised input guards for preserved node addresses, duplicate provider MACs, reserved floating addresses, and overlapping workload networks.
 - Exercised storage guards for wrong serials, mounted OS descendants, existing Ceph signatures, and partitioned/nonblank disks.
-- Ran 39 guard tests: the original 11 input/storage/guest-volume checks plus 28 exact-Ceph-removal guard and execution-flow tests. The added tests use fixtures and mocked subprocesses; they never operate on real disks.
+- Ran 43 guard tests: the original 11 input/storage/guest-volume checks plus 32 exact-Ceph-removal guard and execution-flow tests. The added tests use fixtures and mocked subprocesses; they never operate on real disks.
+- Added regression coverage for the actual Linux model strings from all three nodes, rejection of unrecorded prefixes, diagnostic values before a model stop, and exact byte-capacity mismatch messages. Model/capacity failures still reject apply before any mutation or confirmation.
 - Checked shell syntax and generated inventory membership.
 - Checked the consolidated storage collector with simulated SSH and diagnostic commands, including all-node collection, report privacy, optional tool installation, and continuation after connection/SMART flags. This is a local check, not real disk-health validation.
 - Checked explicit node1/node2/node3/all selection, invalid target rejection, and the explanatory message for SMART command exit 4 with simulated commands.
@@ -41,9 +42,15 @@ All six drives report overall PASSED in this snapshot. Node1's SATA Runtime_Bad_
 
 1. Use the visual Stage 0 lesson to understand the existing report; its collection is complete.
 2. Resolve health/diagnostic questions and verify USB provider links, DNS operation, the unused API VIP, and the floating-IP range's DHCP/device exclusions.
-3. Stage 0 Step 7 now documents the exact reset-ceph helper for all three recorded SATA SSDs. The user has confirmed old Ceph contents are disposable. Execution is pending; its live guards and per-node command/serial confirmation still run before each removal. Keep later disk reuse conditional on its health review.
+3. Stage 0 Step 7 now documents the exact reset-ceph helper for all three recorded SATA SSDs. The user has confirmed old Ceph contents are disposable. The first user run stopped on node1 at the old model/capacity comparison before any removal; node2/node3 were not attempted. The corrected retry is pending; live guards and per-node command/serial confirmation still run before each removal. Keep later disk reuse conditional on its health review.
 4. Fill private/lab.yml and use the staged commands in README.md. Hermes remains intact.
 
-The storage-target helper provisions only an unowned blank disk and refuses old Ceph/LVM/filesystem signatures. The separate reset-ceph helper removes only the three recorded old Ceph allocations, defaults to plan-only, requires exact host/disk/ownership/current-use checks and per-node approval for apply, and refuses new Cinder ownership. This implementation has local guard/transport validation; actual cleanup and post-check results have not yet been supplied.
+The storage-target helper provisions only an unowned blank disk and refuses old Ceph/LVM/filesystem signatures. The separate reset-ceph helper removes only the three recorded old Ceph allocations, defaults to plan-only, requires exact host/disk/ownership/current-use checks and per-node approval for apply, and refuses new Cinder ownership. This implementation has local guard/transport validation; the supplied live attempt stopped before cleanup, and successful cleanup/post-check results have not yet been supplied.
 
 Two NICs per node are part of the documented design: built-in management interfaces retain the original node IPs; actual USB MACs are known for the proposed ext0 provider interfaces. Provider link/cabling/VLAN operation remains unverified. The README execution map separates observed results, the immediate cleanup run and later steps requiring additional inputs.
+
+## First cleanup attempt: reviewed failure
+
+On 2026-10-21 the user ran reset-ceph against all nodes. Git update, node1 SSH and sudo succeeded. The helper stopped at `Disk model/size changed` before displaying a plan or executing removal; later nodes were skipped. No disk was erased by that attempt.
+
+The original helper compared SMART full model names with Linux lsblk model names. The existing discovery already recorded node1 as `KINGSTON SUV400S` and node3 as `KINGSTON SA400S3`; their SMART names are longer. The source now records these fields separately, validates against the observed Linux model, and prints actual/expected values before validation. Serial, byte capacity, disk ownership and use protections remain. The original error did not expose observed capacity; it remains a live check on retry.

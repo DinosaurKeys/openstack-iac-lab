@@ -52,7 +52,7 @@ for node in "${nodes[@]}"; do
   tr -d '\r' < "$node_report" >> "$report"
   install -m 0600 "$report" "$repo_dir/build/ceph-reset-report.txt"
   if [[ "$status" == STOPPED ]]; then
-    printf '\nStopped at %s; later nodes were not attempted. Earlier completed changes remain.\n' "$node"
+    printf '\nStopped at %s; later nodes were not attempted.\n' "$node"
     printf 'Report: %s/build/ceph-reset-report.txt\n' "$repo_dir"
     exit 1
   fi

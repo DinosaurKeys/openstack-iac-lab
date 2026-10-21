@@ -11,10 +11,12 @@ import subprocess
 import sys
 from pathlib import Path
 
-# Identities come from Joe's 2026-10-21 reports, not disk-name guesses.
+# SMART's full model and lsblk's Linux model are separate reported fields.
+# Both come from Joe's 2026-10-21 reports; never infer a model by prefix.
 TARGETS = {
     'node1': {
         'ip': '192.168.0.200', 'model': 'KINGSTON SUV400S37240G',
+        'lsblk_model': 'KINGSTON SUV400S',
         'serial': '50026B7766070422',
         'by_id': '/dev/disk/by-id/ata-KINGSTON_SUV400S37240G_50026B7766070422',
         'pv_uuid': 'AQDsnI-3mcw-CC50-WzMu-7krG-nWn2-A7Cjku',
@@ -23,6 +25,7 @@ TARGETS = {
     },
     'node2': {
         'ip': '192.168.0.201', 'model': 'ADATA SU630',
+        'lsblk_model': 'ADATA SU630',
         'serial': '4P3521354988',
         'by_id': '/dev/disk/by-id/ata-ADATA_SU630_4P3521354988',
         'pv_uuid': 'RMp9V0-TZ3W-uSBZ-6mgL-5Biu-W8f2-552tfm',
@@ -31,6 +34,7 @@ TARGETS = {
     },
     'node3': {
         'ip': '192.168.0.202', 'model': 'KINGSTON SA400S37240G',
+        'lsblk_model': 'KINGSTON SA400S3',
         'serial': '50026B768317883A',
         'by_id': '/dev/disk/by-id/ata-KINGSTON_SA400S37240G_50026B768317883A',
         'pv_uuid': '0dfQpA-3dLn-qbHp-J4Gr-z225-mxP7-RKDvW4',
@@ -139,8 +143,11 @@ def check(node, state):
         raise ValueError('Target must be the recorded whole SATA disk')
     if str(disk.get('serial', '')).strip() != target['serial']:
         raise ValueError('Disk serial changed')
-    if str(disk.get('model', '')).strip() != target['model'] or int(disk['size']) != DISK_BYTES:
-        raise ValueError('Disk model/size changed')
+    model = str(disk.get('model', '')).strip()
+    if model != target['lsblk_model']:
+        raise ValueError(f'Disk Linux model mismatch: expected={target["lsblk_model"]!r}, observed={model!r}')
+    if int(disk['size']) != DISK_BYTES:
+        raise ValueError(f'Disk capacity mismatch: expected={DISK_BYTES} bytes, observed={disk["size"]!r} bytes')
     if not state['root_disks'] or state['real'] in state['root_disks']:
         raise ValueError('Target backs Ubuntu, or Ubuntu ancestors could not be established')
     devices = list(walk(disk))
@@ -201,14 +208,23 @@ def commands(node):
 
 def reset(node, apply=False):
     state = collect(node)
-    status = check(node, state)
     target = TARGETS[node]
     print(f'\nStage 0: {node} ({target["ip"]})', flush=True)
-    print(f'SATA: {target["model"]}; serial={target["serial"]}; bytes={DISK_BYTES}', flush=True)
+    print(f'Mode: {"APPLY REQUESTED; validation and confirmation required" if apply else "PLAN ONLY"}', flush=True)
+    print('Identity observations before validation:', flush=True)
+    print(f'  Recorded full model (SMART): {target["model"]!r}', flush=True)
+    print(f'  Expected Linux model (lsblk): {target["lsblk_model"]!r}', flush=True)
+    print(f'  Expected serial: {target["serial"]!r}; expected capacity: {DISK_BYTES} bytes', flush=True)
+    for disk in state['tree']:
+        print(f'  Observed Linux model: {disk.get("model")!r}', flush=True)
+        print(f'  Observed serial: {disk.get("serial")!r}; observed capacity: {disk.get("size")!r} bytes', flush=True)
     print(f'Stable target: {target["by_id"]} -> {state["real"]}', flush=True)
     print(f'Ubuntu: {state["root_source"]}; parent disks={state["root_disks"]}', flush=True)
-    for item in walk(state['tree'][0]):
-        print(f'  {item["name"]}: type={item["type"]} filesystem={item.get("fstype")} mounts={item.get("mountpoints")}', flush=True)
+    for disk in state['tree']:
+        for item in walk(disk):
+            print(f'  {item["name"]}: type={item["type"]} filesystem={item.get("fstype")} mounts={item.get("mountpoints")}', flush=True)
+    status = check(node, state)
+    print('All target, ownership and current-use checks passed.', flush=True)
     if status == 'blank':
         print(f'RESULT {node}: ALREADY_BLANK; no change', flush=True)
         return

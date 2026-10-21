@@ -13,14 +13,22 @@ reset = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(reset)
 
 
-def fixture():
-    target = reset.TARGETS['node3']
+# Literal lsblk MODEL values in the user's discovery, separately from SMART.
+OBSERVED_LSBLK_MODELS = {
+    'node1': 'KINGSTON SUV400S',
+    'node2': 'ADATA SU630',
+    'node3': 'KINGSTON SA400S3',
+}
+
+
+def fixture(node='node3'):
+    target = reset.TARGETS[node]
     return {
-        'hostname': 'node3', 'ips': [target['ip']], 'real': '/dev/test-sata',
+        'hostname': node, 'ips': [target['ip']], 'real': '/dev/test-sata',
         'root_source': '/dev/mapper/ubuntu--vg-ubuntu--lv', 'root_disks': ['/dev/test-nvme'],
         'tree': [{
             'name': '/dev/test-sata', 'kname': 'test-sata', 'type': 'disk',
-            'serial': target['serial'], 'model': target['model'], 'size': reset.DISK_BYTES,
+            'serial': target['serial'], 'model': OBSERVED_LSBLK_MODELS[node], 'size': reset.DISK_BYTES,
             'ro': False, 'mountpoints': [None], 'fstype': 'LVM2_member',
             'children': [{
                 'name': '/dev/dm-test', 'kname': 'dm-test', 'type': 'lvm',
@@ -47,9 +55,8 @@ def blank_fixture():
 
 class CephResetTests(unittest.TestCase):
     def setUp(self):
-        target = reset.TARGETS['node3']
-        lv_path = f'/dev/{target["vg"]}/{target["lv"]}'
-        self.resolve = patch.object(reset.os.path, 'realpath', side_effect=lambda name: '/dev/dm-test' if str(name) == lv_path else str(name))
+        lv_paths = {f'/dev/{target["vg"]}/{target["lv"]}' for target in reset.TARGETS.values()}
+        self.resolve = patch.object(reset.os.path, 'realpath', side_effect=lambda name: '/dev/dm-test' if str(name) in lv_paths else str(name))
         self.resolve.start()
         self.addCleanup(self.resolve.stop)
         self.state = fixture()
@@ -77,11 +84,39 @@ class CephResetTests(unittest.TestCase):
         self.rejected('serial')
 
     def test_wrong_model_or_size(self):
-        for field, value in [('model', 'OTHER'), ('size', 1000)]:
+        for field, value, reason in [('model', 'OTHER', 'Linux model mismatch'), ('size', 1000, 'capacity mismatch')]:
             with self.subTest(field=field):
                 self.state = fixture()
                 self.state['tree'][0][field] = value
-                self.rejected('model/size')
+                self.rejected(reason)
+
+    def test_actual_linux_models_pass_for_all_three_nodes(self):
+        for node in OBSERVED_LSBLK_MODELS:
+            with self.subTest(node=node):
+                self.assertEqual(reset.check(node, fixture(node)), 'ceph')
+
+    def test_shorter_kingston_model_is_not_a_prefix_rule(self):
+        self.state['tree'][0]['model'] = 'KINGSTON SA400'
+        self.rejected('Linux model mismatch')
+
+    def test_model_stop_prints_actual_values_before_validation_and_never_mutates(self):
+        self.state['tree'][0]['model'] = 'UNEXPECTED MODEL'
+        with patch.object(reset, 'collect', return_value=self.state), patch('builtins.input') as ask, patch.object(reset.subprocess, 'run') as run, redirect_stdout(io.StringIO()) as log:
+            with self.assertRaisesRegex(ValueError, "expected='KINGSTON SA400S3', observed='UNEXPECTED MODEL'"):
+                reset.reset('node3', apply=True)
+        run.assert_not_called()
+        ask.assert_not_called()
+        self.assertIn("Observed Linux model: 'UNEXPECTED MODEL'", log.getvalue())
+        self.assertIn(f'observed capacity: {reset.DISK_BYTES} bytes', log.getvalue())
+        self.assertNotIn('checks passed', log.getvalue())
+
+    def test_size_stop_reports_exact_expected_and_observed_bytes(self):
+        self.state['tree'][0]['size'] = reset.DISK_BYTES - 512
+        with patch.object(reset, 'collect', return_value=self.state), patch.object(reset.subprocess, 'run') as run, redirect_stdout(io.StringIO()) as log:
+            with self.assertRaisesRegex(ValueError, f'expected={reset.DISK_BYTES} bytes, observed={reset.DISK_BYTES - 512} bytes'):
+                reset.reset('node3', apply=True)
+        run.assert_not_called()
+        self.assertIn(f'observed capacity: {reset.DISK_BYTES - 512} bytes', log.getvalue())
 
     def test_os_backing_disk(self):
         self.state['root_disks'].append('/dev/test-sata')

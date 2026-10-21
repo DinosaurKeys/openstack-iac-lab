@@ -6,6 +6,8 @@ Three controllers on Ubuntu 24.04, Cinder LVM, Ansible, Terraform, an applicatio
 
 [Read the cleanup lesson before running it](docs/00-hermes-codex-and-node-reset.md#7-remove-the-recorded-old-ceph-allocations). Joe has confirmed that the old Ceph contents can be discarded. The script checks current use, shows the exact commands and asks for each node/serial confirmation.
 
+**Latest run:** node1 stopped at the model/capacity guard before erasure; node2/node3 were not attempted. [The lesson explains the comparison bug and corrected retry](docs/00-hermes-codex-and-node-reset.md#observed-stop-model-and-capacity-check). The helper now uses the Linux model names already present in your discovery and prints expected/observed identity values before checking them.
+
 ## Two NICs per node
 
 Both NICs were detected in the supplied discovery. **Provider cable/link operation is still unverified.**
@@ -39,7 +41,7 @@ Follow this table **from top to bottom**, reviewing the result at each stop. Com
 | Order / chapter | What we run | Why we need it | Finish check |
 |---|---|---|---|
 | 1 · Stage 0 — **done** | Ubuntu install, discovery and `check-storage.sh` | Establish actual host, disk and NIC identities | Three reports reviewed; IPs preserved |
-| 2 · Stage 0 — **run now** | `bash scripts/reset-ceph.sh joe --node all --apply` | Old Ceph still owns the SATA SSDs after the OS reinstall | `CLEANED` or `ALREADY_BLANK` for all three |
+| 2 · Stage 0 — **retry corrected script** | `bash scripts/reset-ceph.sh joe --node all --apply` | Old Ceph still owns the SATA SSDs after the OS reinstall | `CLEANED` or `ALREADY_BLANK` for all three |
 | 3 · Stage 0 — next review | Two-NIC link/switch review; remaining disk-health findings; DNS and address reservations | Prevent a disconnected provider uplink or duplicate IP from becoming an OpenStack failure | Link evidence and confirmed network inputs |
 | 4 · Stage 1 | `bash scripts/bootstrap-hermes.sh`, activate its environment, then `python scripts/labctl.py doctor` | Install the isolated deployment tools on Hermes | Required tools found; Terraform needed by Stage 3 |
 | 5 · Stages 1 + 2 | Review `private/lab.yml`; prepare Hermes SSH-key access; `labctl configure --hosts-only`, `preflight`, `base` | Give Ansible verified values and a repeatable Ubuntu baseline | Correct three-node inventory, SSH and time service |

@@ -1,6 +1,6 @@
 # Stage 0 — Understand and verify the three nodes
 
-**Current lesson:** remove the recorded old Ceph allocations in [Step 7](#7-remove-the-recorded-old-ceph-allocations). The storage report below is already collected and reviewed. The [execution map](../README.md#execution-map-what-runs-when-and-why) shows every remaining stage, including the two-NIC layout.
+**Current lesson:** understand the [model/capacity validation stop](#observed-stop-model-and-capacity-check), then retry Stage 0 Step 7 with the corrected script. The storage report below is already collected and reviewed. The [execution map](../README.md#execution-map-what-runs-when-and-why) shows every remaining stage, including the two-NIC layout.
 
 | Step | Status |
 |---|---|
@@ -8,7 +8,7 @@
 | Log in as `joe` and run discovery | Completed |
 | Collect storage information from all three nodes | Completed; results explained below |
 | Resolve diagnostic warnings and review disk reuse | Pending |
-| Clean the recorded SATA Ceph allocations | Script and lesson ready; user execution pending |
+| Clean the recorded SATA Ceph allocations | First attempt stopped before erasure; corrected comparison ready for retry |
 | Verify two NIC paths / deploy OpenStack | Pending |
 
 ## Storage inspection: one script for all three nodes
@@ -224,7 +224,8 @@ The [Hermes wrapper](../scripts/reset-ceph.sh) visits node1 → node2 → node3.
 
 | Script step | What happens | Why |
 |---|---|---|
-| Identify | Match hostname, management IP, stable disk path, serial, model and byte capacity | Avoid selecting another host/disk |
+| Show observations | Print expected/observed model, serial, byte capacity, disk tree and Ubuntu backing | Keep a failed validation diagnosable |
+| Identify | Match hostname, management IP, stable disk path, serial, recorded Linux model and byte capacity | Avoid selecting another host/disk |
 | Check Ubuntu | Trace the current `/` device back to its physical disk | Reject any target backing Ubuntu |
 | Check ownership/use | Require the exact recorded single-PV/single-LV Ceph layout; inspect mounts/swap, holders, raw open-device handles and LV open count | An unmounted BlueStore disk can still be in use |
 | Show the plan | Print the host, disk tree, ownership and exact removal commands | Make the operation readable before it happens |
@@ -250,6 +251,33 @@ These are an explanation of the commands the helper prints with **actual recorde
 There is no `--force` override, no wildcard device target and no automatic service stop. A changed layout, mounted/open target or new `cinder-volumes` owner causes a refusal. A partially completed removal also needs review before resuming.
 
 </details>
+
+### Observed stop: model and capacity check
+
+**Your first cleanup attempt stopped on node1 before erasure.** The run reached SSH and sudo, then failed the model/capacity guard. It never reached the removal commands or the `ERASE ...` confirmation. Node2/node3 were not attempted.
+
+| Output | Meaning |
+|---|---|
+| Git `Fast-forward` | The checkout updated successfully |
+| SSH and sudo prompts completed | The helper started on node1 |
+| `STOP: Disk model/size changed` | The old identity comparison failed; it did not print which value differed |
+| `Stopped at node1` | No earlier node existed in this run; no cleanup was performed |
+
+**A confirmed script defect:** the expected model was copied from SMART, but the comparison read Linux's `lsblk` model. Your earlier discovery already showed different strings on the Kingston disks:
+
+| Node | Full model from SMART | Linux MODEL from discovery |
+|---|---|---|
+| node1 | `KINGSTON SUV400S37240G` | `KINGSTON SUV400S` |
+| node2 | `ADATA SU630` | `ADATA SU630` |
+| node3 | `KINGSTON SA400S37240G` | `KINGSTON SA400S3` |
+
+The old code required those two fields to be identical. That makes the recorded Kingston Linux names fail. This was an implementation error; the stopped run does not establish that you changed a disk.
+
+**Correction:** compare `lsblk` with its recorded Linux model. Keep the full SMART name as descriptive information. Preserve the exact serial, byte-capacity, stable-path, PV/VG/LV and current-use checks. No prefix matching or force override was added.
+
+The corrected helper prints expected and observed model, serial and byte capacity **before** validation. Model and capacity now have separate mismatch messages. The failed run did not show its observed byte capacity, so a current capacity match must still be established by the retry.
+
+**Next:** pull the corrected script and run the consolidated command below. Read each current target and command list before its per-node confirmation. A passing local test does not mean the cleanup has already succeeded on your nodes.
 
 ### Run one consolidated command
 

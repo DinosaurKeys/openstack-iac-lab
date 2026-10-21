@@ -1,8 +1,33 @@
 # Stage 1 — Three controllers, two computes, one Cinder LVM host
 
-**Current checkpoint:** Python tools are installed on Hermes. Ansible collections remain incomplete. Continue with the recovery step below; review its result before configuring nodes.
+**Current checkpoint:** Hermes tool setup completed successfully. The resume report records completed collection installs, a passed Python dependency check and `TOOLS_FOUND`. Read the [observed result](#observed-hermes-tool-setup); no repeat installation is needed.
 
 ## 1. Finish the Hermes tool setup
+
+### Observed Hermes tool setup
+
+Your resume report started at `2026-10-21T20:35:49Z` and ended with **`RESULT: TOOLS_FOUND`**.
+
+| Check | Observed result | Meaning |
+|---|---|---|
+| Kolla collections | COMPLETED | Kolla's collection install command succeeded |
+| Project collections | COMPLETED | The project's collection install command succeeded |
+| Python dependency check | COMPLETED | `pip check` found no broken declared package requirements |
+| Version manifest and collection list | Completed | The script saved Python versions and successfully listed collections; exact collection versions are in the full log |
+| Tool locations | All eight found | Doctor found every requested executable |
+
+| Tools | Location confirmed by the report |
+|---|---|
+| Python, Ansible playbook/inventory, Kolla-Ansible, OpenStack client | `/home/joe/venvs/kolla-iac/bin/` |
+| SSH and Git | `/usr/bin/ssh`, `/usr/bin/git` |
+| Terraform | `/usr/bin/terraform` |
+
+**What changed?** The PATH correction allowed the recovery to finish the collection setup that failed earlier. The project environment supplied the intended Python/Ansible/Kolla/OpenStack commands. Terraform was already available; this recovery did not install it. The summary establishes its location, not its version or provider operation.
+
+**This checkpoint is complete.** The result verifies collection command completion, declared Python dependencies and executable discovery. It does not test node SSH access, OpenStack APIs or a running cloud. No deployment was attempted. Next comes the lesson for Ansible SSH access as `joe` and reviewed host configuration.
+
+<details>
+<summary>Completed recovery lesson: collection purposes, script actions and command</summary>
 
 ### Resume collections on Hermes
 
@@ -45,7 +70,9 @@ The last line only displays the short report. Resume mode uses no sudo and makes
 | `RESULT: REVIEW` | Read the actual `MISSING` entry; Terraform is needed by Stage 3 |
 | `STOPPED` or expected executable missing | Read the failed phase/error in the full log before another attempt |
 
-**Checkpoint:** share the short summary. The resume path has local fixture tests; a successful corrected run on Hermes has not yet been observed. After a passing report, the next lesson is preparing Ansible SSH access and reviewed host configuration.
+**Reviewed result:** the supplied resume summary passed on Hermes as recorded above. This command is a completed-step reference; no repeat run is needed.
+
+</details>
 
 <details>
 <summary>Earlier lesson: controller architecture, installed packages and the reviewed PATH failure</summary>

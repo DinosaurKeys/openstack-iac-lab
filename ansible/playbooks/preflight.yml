@@ -1,0 +1,31 @@
+---
+- name: Read host facts without changing infrastructure
+  hosts: lab_nodes
+  gather_facts: true
+  tasks:
+    - name: Show current host and operating system
+      ansible.builtin.debug:
+        msg:
+          hostname: "{{ ansible_facts.hostname }}"
+          os: "{{ ansible_facts.distribution }} {{ ansible_facts.distribution_version }}"
+          memory_mb: "{{ ansible_facts.memtotal_mb }}"
+    - name: Inspect interfaces, routing, disks and time
+      ansible.builtin.command: "{{ item }}"
+      loop:
+        - ip -br address
+        - ip route
+        - lsblk -e7 -o NAME,PATH,SIZE,TYPE,FSTYPE,MOUNTPOINTS,MODEL,SERIAL
+        - timedatectl status
+        - swapon --show
+      changed_when: false
+      register: observations
+    - name: Show observations
+      ansible.builtin.debug:
+        var: observations.results
+    - name: Inspect KVM availability
+      ansible.builtin.stat:
+        path: /dev/kvm
+      register: kvm
+    - name: Show KVM result
+      ansible.builtin.debug:
+        msg: "KVM device exists: {{ kvm.stat.exists }}"

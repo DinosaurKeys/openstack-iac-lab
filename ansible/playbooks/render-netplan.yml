@@ -1,0 +1,7 @@
+---
+- name: Render reviewed Netplan candidates onto Hermes only
+  hosts: lab_nodes
+  gather_facts: false
+  become: false
+  roles:
+    - netplan

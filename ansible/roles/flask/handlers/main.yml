@@ -1,0 +1,6 @@
+---
+- name: Restart labapp
+  ansible.builtin.systemd_service:
+    name: labapp
+    daemon_reload: true
+    state: restarted

@@ -1,0 +1,20 @@
+---
+groups:
+  - name: lab
+    rules:
+      - alert: HostTargetDown
+        expr: up{job="nodes"} == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'Metrics target {{ $labels.host }} is unreachable'
+          description: 'Investigate exporter, network, and host availability; this alone does not prove the host is powered off.'
+      - alert: ApplicationHTTPDown
+        expr: probe_success{job="app_http"} == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: Application health request is failing
+          description: Check Nginx, Gunicorn, Flask, PostgreSQL, and the route from the monitoring VM.

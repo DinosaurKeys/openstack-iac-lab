@@ -1,0 +1,11 @@
+---
+- name: Install host metrics on physical and workload nodes
+  hosts: lab_nodes:app:database:monitoring
+  become: true
+  roles:
+    - node_exporter
+- name: Install the monitoring services on their workload VM
+  hosts: monitoring
+  become: true
+  roles:
+    - monitoring

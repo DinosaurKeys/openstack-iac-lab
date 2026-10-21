@@ -1,0 +1,8 @@
+terraform {
+  cloud {
+    organization = "REPLACE_WITH_YOUR_HCP_ORGANIZATION"
+    workspaces {
+      name = "openstack-iac-first"
+    }
+  }
+}

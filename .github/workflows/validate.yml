@@ -1,0 +1,37 @@
+name: Validate source without deploying
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  source:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install local validation dependencies
+        run: python -m pip install 'ansible-core>=2.19,<2.20.99' PyYAML python-hcl2
+      - name: Install declared Ansible collections
+        run: ansible-galaxy collection install -r ansible/requirements.yml
+      - name: Check source, links, and disk/input guards
+        run: |
+          python scripts/check-repository.py
+          python -m unittest discover -s tests -v
+          bash -n scripts/discover.sh scripts/bootstrap-hermes.sh ansible/roles/node_exporter/files/cinder-vg-metrics.sh
+      - name: Check Ansible playbooks
+        run: |
+          for playbook in ansible/playbooks/*.yml; do
+            ansible-playbook "$playbook" --syntax-check
+          done
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.16.4
+      - name: Validate Terraform without cloud credentials
+        run: |
+          for root in terraform/01-first-workload terraform/02-application terraform/03-monitoring; do
+            terraform -chdir="$root" init -backend=false -input=false
+            terraform -chdir="$root" validate
+          done

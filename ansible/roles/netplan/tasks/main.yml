@@ -1,0 +1,20 @@
+---
+- name: Require verified network inputs
+  ansible.builtin.assert:
+    that:
+      - provider_mac is match('^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$')
+      - management_dns | length > 0
+    fail_msg: Fill in the verified provider MAC and DNS addresses first.
+- name: Make the candidate directory on Hermes
+  ansible.builtin.file:
+    path: "{{ playbook_dir }}/../../build/netplan"
+    state: directory
+    mode: '0700'
+  delegate_to: localhost
+  run_once: true
+- name: Render a candidate without installing it on the node
+  ansible.builtin.template:
+    src: management.yaml.j2
+    dest: "{{ playbook_dir }}/../../build/netplan/{{ inventory_hostname }}.yaml"
+    mode: '0600'
+  delegate_to: localhost

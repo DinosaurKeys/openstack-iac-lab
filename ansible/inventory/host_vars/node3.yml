@@ -1,0 +1,3 @@
+---
+provider_mac: REPLACE_WITH_VERIFIED_MAC
+# The Cinder data disk is deliberately not specified before live review.

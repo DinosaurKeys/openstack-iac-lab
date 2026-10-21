@@ -1,0 +1,108 @@
+---
+- name: Require reviewed persistent-storage and credential inputs
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.distribution == 'Ubuntu'
+      - ansible_facts.distribution_version is version('24.04', '>=')
+      - ansible_facts.distribution_version is version('24.10', '<')
+      - database_data_uuid is defined
+      - database_data_uuid is match('^[0-9a-fA-F-]{36}$')
+      - database_data_uuid not in (ansible_facts.mounts | selectattr('mount', 'equalto', '/') | map(attribute='uuid') | list)
+      - lab_db_password is defined
+      - lab_db_password | length >= 20
+    fail_msg: Supply the verified Cinder filesystem UUID and a strong private database password.
+  no_log: true
+- name: Install PostgreSQL and module dependencies
+  ansible.builtin.apt:
+    name: [postgresql-16, python3-psycopg2, rsync, acl]
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+- name: Mount the already formatted and reviewed Cinder filesystem
+  ansible.posix.mount:
+    path: /srv/postgresql
+    src: 'UUID={{ database_data_uuid }}'
+    fstype: ext4
+    opts: defaults
+    state: mounted
+- name: Check the destination database cluster
+  ansible.builtin.stat:
+    path: /srv/postgresql/16/main/PG_VERSION
+  register: persistent_pg
+- name: Seed a new empty cluster onto the data volume
+  when: not persistent_pg.stat.exists
+  block:
+    - name: Stop the default cluster before copying
+      ansible.builtin.service:
+        name: postgresql@16-main
+        state: stopped
+    - name: Create its destination
+      ansible.builtin.file:
+        path: /srv/postgresql/16/main
+        state: directory
+        owner: postgres
+        group: postgres
+        mode: '0700'
+    - name: Copy the fresh cluster once
+      ansible.builtin.command:
+        argv: [rsync, '-a', /var/lib/postgresql/16/main/, /srv/postgresql/16/main/]
+        creates: /srv/postgresql/16/main/PG_VERSION
+- name: Point PostgreSQL at persistent data
+  ansible.builtin.lineinfile:
+    path: /etc/postgresql/16/main/postgresql.conf
+    regexp: '^#?data_directory\s*='
+    line: "data_directory = '/srv/postgresql/16/main'"
+  notify: Restart PostgreSQL
+- name: Create the database service override directory
+  ansible.builtin.file:
+    path: /etc/systemd/system/postgresql@16-main.service.d
+    state: directory
+    mode: '0755'
+- name: Require the data filesystem before starting PostgreSQL
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/postgresql@16-main.service.d/data-volume.conf
+    content: |
+      [Unit]
+      RequiresMountsFor=/srv/postgresql
+    mode: '0644'
+  notify: Restart PostgreSQL
+- name: Listen on localhost and the private VM address
+  ansible.builtin.lineinfile:
+    path: /etc/postgresql/16/main/postgresql.conf
+    regexp: '^#?listen_addresses\s*='
+    line: "listen_addresses = 'localhost,{{ private_ip }}'"
+  notify: Restart PostgreSQL
+- name: Allow only the app VM to authenticate to this database
+  ansible.builtin.lineinfile:
+    path: /etc/postgresql/16/main/pg_hba.conf
+    line: "host labapp labapp {{ hostvars[groups['app'][0]].private_ip }}/32 scram-sha-256"
+    state: present
+  notify: Restart PostgreSQL
+- name: Apply configuration before database operations
+  ansible.builtin.meta: flush_handlers
+- name: Start the cluster
+  ansible.builtin.service:
+    name: postgresql@16-main
+    enabled: true
+    state: started
+- name: Create the application login
+  community.postgresql.postgresql_user:
+    name: labapp
+    password: '{{ lab_db_password }}'
+    role_attr_flags: LOGIN,NOSUPERUSER,NOCREATEDB,NOCREATEROLE
+  become_user: postgres
+  no_log: true
+- name: Create the application database
+  community.postgresql.postgresql_db:
+    name: labapp
+    owner: labapp
+  become_user: postgres
+- name: Create the learning table
+  community.postgresql.postgresql_table:
+    db: labapp
+    name: visits
+    owner: labapp
+    columns:
+      - id bigserial primary key
+      - created_at timestamptz default now()
+  become_user: postgres

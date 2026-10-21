@@ -1,0 +1,30 @@
+---
+- name: Require the documented operating system
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.distribution == 'Ubuntu'
+      - ansible_facts.distribution_version is version('24.04', '>=')
+      - ansible_facts.distribution_version is version('24.10', '<')
+    fail_msg: This guide targets Ubuntu 24.04 LTS.
+- name: Install the base tools
+  ansible.builtin.apt:
+    name: "{{ common_packages }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+- name: Set the intended hostname
+  ansible.builtin.hostname:
+    name: "{{ inventory_hostname }}"
+- name: Maintain the three management-name entries
+  ansible.builtin.blockinfile:
+    path: /etc/hosts
+    marker: '# {mark} OPENSTACK IAC LAB'
+    block: |
+      192.168.0.200 node1
+      192.168.0.201 node2
+      192.168.0.202 node3
+- name: Enable time synchronization
+  ansible.builtin.service:
+    name: chrony
+    enabled: true
+    state: started

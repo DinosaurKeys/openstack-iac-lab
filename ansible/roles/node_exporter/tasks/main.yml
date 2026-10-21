@@ -1,0 +1,43 @@
+---
+- name: Install the distribution's node exporter
+  ansible.builtin.apt:
+    name: prometheus-node-exporter
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+- name: Create the textfile collector directory
+  ansible.builtin.file:
+    path: /var/lib/prometheus/node-exporter
+    state: directory
+    owner: prometheus
+    group: prometheus
+    mode: '0755'
+- name: Configure the exporter listener and textfile directory
+  ansible.builtin.copy:
+    dest: /etc/default/prometheus-node-exporter
+    content: |
+      ARGS="--web.listen-address=:9100 --collector.textfile.directory=/var/lib/prometheus/node-exporter"
+    mode: '0644'
+  notify: Restart node exporter
+- name: Supply Cinder VG metrics on the storage host
+  when: inventory_hostname in groups.get('storage', [])
+  block:
+    - name: Install the read-only VG metrics collector
+      ansible.builtin.copy:
+        src: cinder-vg-metrics.sh
+        dest: /usr/local/sbin/cinder-vg-metrics
+        mode: '0755'
+    - name: Schedule the metrics collector
+      ansible.builtin.cron:
+        name: Cinder VG metrics
+        user: root
+        minute: '*'
+        job: /usr/local/sbin/cinder-vg-metrics
+    - name: Write the first sample
+      ansible.builtin.command: /usr/local/sbin/cinder-vg-metrics
+      changed_when: false
+- name: Enable node exporter
+  ansible.builtin.service:
+    name: prometheus-node-exporter
+    enabled: true
+    state: started

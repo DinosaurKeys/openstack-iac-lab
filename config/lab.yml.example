@@ -1,0 +1,45 @@
+---
+# Copy to private/lab.yml. Null/empty values are intentionally unknown.
+# Quote MAC addresses and serials when replacing null values.
+schema_version: 1
+fresh_install_confirmed: false
+nodes:
+  node1:
+    address: 192.168.0.200
+    provider_mac: null
+  node2:
+    address: 192.168.0.201
+    provider_mac: null
+  node3:
+    address: 192.168.0.202
+    provider_mac: null
+management:
+  interface: enp0s31f6
+  cidr: 192.168.0.0/24
+  gateway: 192.168.0.1
+  vip: 192.168.0.100
+  dns_servers: []
+provider:
+  interface: ext0
+  physical_network: physnet1
+floating_pool:
+  start: null
+  end: null
+  router_dhcp_exclusions_verified: false
+storage:
+  host: node3
+  disk_by_id: null
+  expected_serial: null
+  ownership_and_health_verified: false
+workloads:
+  admin_cidr: 192.168.0.0/24
+  first_cidr: 10.42.10.0/24
+  app_cidr: 10.42.20.0/24
+  cidr_nonoverlap_verified: false
+  image_name: ubuntu-24.04
+  flavor_name: lab.small
+  key_pair: lab-key
+  public_key_path: ~/.ssh/id_ed25519.pub
+hcp:
+  organization: null
+  local_execution_verified: false

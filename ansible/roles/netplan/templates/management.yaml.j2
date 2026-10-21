@@ -1,0 +1,21 @@
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    {{ management_interface }}:
+      dhcp4: false
+      addresses:
+        - {{ management_address }}
+      routes:
+        - to: default
+          via: {{ management_gateway }}
+      nameservers:
+        addresses: {{ management_dns | to_json }}
+    {{ provider_interface }}:
+      match:
+        macaddress: '{{ provider_mac }}'
+      set-name: {{ provider_interface }}
+      dhcp4: false
+      dhcp6: false
+      link-local: []
+      optional: true

@@ -1,0 +1,32 @@
+---
+- name: Install Nginx
+  ansible.builtin.apt:
+    name: nginx
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+- name: Install the application site
+  ansible.builtin.template:
+    src: labapp.conf.j2
+    dest: /etc/nginx/sites-available/labapp
+    mode: '0644'
+  notify: Reload nginx
+- name: Disable the default site on this dedicated app VM
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  notify: Reload nginx
+- name: Enable the application site
+  ansible.builtin.file:
+    src: /etc/nginx/sites-available/labapp
+    dest: /etc/nginx/sites-enabled/labapp
+    state: link
+  notify: Reload nginx
+- name: Validate Nginx configuration before reload
+  ansible.builtin.command: nginx -t
+  changed_when: false
+- name: Start Nginx
+  ansible.builtin.service:
+    name: nginx
+    enabled: true
+    state: started

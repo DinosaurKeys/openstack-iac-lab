@@ -1,0 +1,35 @@
+---
+- name: Prepare exactly the approved blank Cinder data disk
+  hosts: storage
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Require explicit approval and a single storage host
+      ansible.builtin.assert:
+        that:
+          - storage_prepare_approved | default(false) | bool
+          - groups['storage'] | length == 1
+          - inventory_hostname == 'node3'
+          - storage_disk_by_id is defined
+          - storage_expected_serial is defined
+          - storage_disk_by_id is match('^/dev/disk/by-id/[A-Za-z0-9_.:+-]+$')
+    - name: Install the validation and provisioning helper
+      ansible.builtin.copy:
+        src: '{{ playbook_dir }}/../../scripts/storage-target.py'
+        dest: /usr/local/sbin/lab-storage-target
+        mode: '0755'
+    - name: Validate ownership again and provision only if blank
+      ansible.builtin.command:
+        argv:
+          - python3
+          - /usr/local/sbin/lab-storage-target
+          - --target
+          - '{{ storage_disk_by_id }}'
+          - --serial
+          - '{{ storage_expected_serial }}'
+          - --apply
+      register: storage_result
+      changed_when: (storage_result.stdout | from_json).changed
+    - name: Show the reviewed storage result
+      ansible.builtin.debug:
+        var: storage_result.stdout

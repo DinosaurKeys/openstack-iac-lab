@@ -1,0 +1,6 @@
+---
+- name: Prepare freshly installed lab nodes
+  hosts: lab_nodes
+  gather_facts: true
+  roles:
+    - common

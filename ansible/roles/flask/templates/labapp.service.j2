@@ -1,0 +1,17 @@
+[Unit]
+Description=OpenStack IaC learning application
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=labapp
+Group=labapp
+WorkingDirectory=/opt/labapp
+EnvironmentFile=/etc/labapp.env
+ExecStart=/opt/labapp/venv/bin/gunicorn --workers 2 --bind 127.0.0.1:8000 --access-logfile - --error-logfile - app:app
+Restart=on-failure
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,144 @@
+---
+- name: Require monitoring inputs
+  ansible.builtin.assert:
+    that:
+      - app_probe_url is defined
+      - app_probe_url is match('^http://[0-9.]+/health$')
+      - grafana_admin_password is defined
+      - grafana_admin_password is match('^[0-9a-fA-F]{48,}$')
+    fail_msg: Supply the observed app URL and a private hex Grafana password.
+  no_log: true
+- name: Install distribution monitoring packages
+  ansible.builtin.apt:
+    name: [prometheus, prometheus-blackbox-exporter, ca-certificates, python3-debian]
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+- name: Create the signed repository key directory
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    mode: '0755'
+- name: Install the official Grafana repository key
+  ansible.builtin.get_url:
+    url: https://apt.grafana.com/gpg-full.key
+    dest: /etc/apt/keyrings/grafana.asc
+    mode: '0644'
+- name: Configure the stable Grafana OSS repository
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/grafana.list
+    content: |
+      deb [signed-by=/etc/apt/keyrings/grafana.asc] https://apt.grafana.com stable main
+    mode: '0644'
+  register: grafana_repo
+- name: Install Grafana OSS
+  ansible.builtin.apt:
+    name: grafana
+    state: present
+    update_cache: '{{ grafana_repo.changed }}'
+- name: Create service override and dashboard directories
+  ansible.builtin.file:
+    path: '{{ item }}'
+    state: directory
+    mode: '0755'
+  loop:
+    - /etc/systemd/system/prometheus.service.d
+    - /etc/systemd/system/prometheus-blackbox-exporter.service.d
+    - /etc/grafana/provisioning/datasources
+    - /etc/grafana/provisioning/dashboards
+    - /var/lib/grafana/dashboards
+- name: Install the two Prometheus alert rules
+  ansible.builtin.copy:
+    src: alerts.yml
+    dest: /etc/prometheus/lab-alerts.yml
+    mode: '0644'
+    validate: /usr/bin/promtool check rules %s
+  notify: Restart Prometheus
+- name: Configure the HTTP probe
+  ansible.builtin.copy:
+    dest: /etc/prometheus/blackbox.yml
+    content: |
+      modules:
+        http_2xx:
+          prober: http
+          timeout: 5s
+          http:
+            preferred_ip_protocol: ip4
+    mode: '0644'
+  notify: Restart blackbox exporter
+- name: Keep Prometheus local to the monitoring VM
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/prometheus.service.d/lab.conf
+    content: |
+      [Service]
+      ExecStart=
+      ExecStart=/usr/bin/prometheus --config.file=/etc/prometheus/prometheus.yml --storage.tsdb.path=/var/lib/prometheus/metrics2 --storage.tsdb.retention.time=7d --web.listen-address=127.0.0.1:9090
+    mode: '0644'
+  notify: Restart Prometheus
+- name: Keep the blackbox listener local
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/prometheus-blackbox-exporter.service.d/lab.conf
+    content: |
+      [Service]
+      ExecStart=
+      ExecStart=/usr/bin/prometheus-blackbox-exporter --config.file=/etc/prometheus/blackbox.yml --web.listen-address=127.0.0.1:9115
+    mode: '0644'
+  notify: Restart blackbox exporter
+- name: Configure Prometheus targets
+  ansible.builtin.template:
+    src: prometheus.yml.j2
+    dest: /etc/prometheus/prometheus.yml
+    mode: '0644'
+    validate: /usr/bin/promtool check config %s
+  notify: Restart Prometheus
+- name: Configure Grafana credentials
+  ansible.builtin.template:
+    src: grafana.ini.j2
+    dest: /etc/grafana/grafana.ini
+    owner: root
+    group: grafana
+    mode: '0640'
+  no_log: true
+  notify: Restart Grafana
+- name: Provision the Prometheus data source
+  ansible.builtin.copy:
+    dest: /etc/grafana/provisioning/datasources/lab.yml
+    content: |
+      apiVersion: 1
+      datasources:
+        - name: Lab Prometheus
+          uid: lab-prometheus
+          type: prometheus
+          access: proxy
+          url: http://127.0.0.1:9090
+          isDefault: true
+          editable: false
+    mode: '0644'
+  notify: Restart Grafana
+- name: Provision the dashboard directory
+  ansible.builtin.copy:
+    dest: /etc/grafana/provisioning/dashboards/lab.yml
+    content: |
+      apiVersion: 1
+      providers:
+        - name: lab
+          folder: OpenStack IaC Lab
+          type: file
+          options:
+            path: /var/lib/grafana/dashboards
+    mode: '0644'
+  notify: Restart Grafana
+- name: Install exactly three dashboards
+  ansible.builtin.copy:
+    src: '{{ item }}'
+    dest: '/var/lib/grafana/dashboards/{{ item }}'
+    mode: '0644'
+  loop: [hosts.json, storage-network.json, application.json]
+  notify: Restart Grafana
+- name: Start monitoring services
+  ansible.builtin.systemd_service:
+    name: '{{ item }}'
+    daemon_reload: true
+    enabled: true
+    state: started
+  loop: [prometheus, prometheus-blackbox-exporter, grafana-server]

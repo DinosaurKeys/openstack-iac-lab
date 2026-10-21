@@ -1,0 +1,12 @@
+---
+- name: Configure the database VM
+  hosts: database
+  become: true
+  roles:
+    - postgres
+- name: Configure the application VM
+  hosts: app
+  become: true
+  roles:
+    - flask
+    - nginx

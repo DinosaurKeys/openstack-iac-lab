@@ -1,0 +1,28 @@
+---
+# Candidate configuration for the fresh cluster. Review before copying.
+kolla_base_distro: ubuntu
+openstack_release: '2026.1'
+openstack_region_name: RegionOne
+kolla_internal_vip_address: 192.168.0.100
+network_interface: enp0s31f6
+neutron_external_interface: ext0
+neutron_plugin_agent: openvswitch
+enable_neutron_agent_ha: true
+enable_haproxy: true
+enable_keepalived: true
+enable_horizon: true
+enable_cinder: true
+enable_cinder_backend_lvm: true
+cinder_backend_ceph: false
+cinder_volume_group: cinder-volumes
+enable_cinder_backup: false
+glance_backend_file: true
+glance_backend_ceph: false
+nova_backend_ceph: false
+nova_compute_virt_type: kvm
+enable_heat: false
+# Monitoring is a separate Terraform workload in Stage 5.
+enable_prometheus: false
+enable_grafana: false
+# Use the selected release's RabbitMQ defaults until explicitly reviewed.
+# Do not copy custom images, Ceph overrides, or old passwords into this cluster.

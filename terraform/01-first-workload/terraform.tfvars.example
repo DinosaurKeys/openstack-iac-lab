@@ -1,0 +1,4 @@
+# Example address choices, not verified free ranges. Review before copying.
+admin_cidr = "192.168.0.0/24"
+workload_cidr = "10.42.10.0/24"
+dns_servers = ["REPLACE_WITH_VERIFIED_DNS_IP"]

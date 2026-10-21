@@ -1,0 +1,15 @@
+---
+- name: Restart Prometheus
+  ansible.builtin.systemd_service:
+    name: prometheus
+    daemon_reload: true
+    state: restarted
+- name: Restart blackbox exporter
+  ansible.builtin.systemd_service:
+    name: prometheus-blackbox-exporter
+    daemon_reload: true
+    state: restarted
+- name: Restart Grafana
+  ansible.builtin.service:
+    name: grafana-server
+    state: restarted

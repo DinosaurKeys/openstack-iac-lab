@@ -1,6 +1,82 @@
 # Stage 1 — Three controllers, two computes, one Cinder LVM host
 
-**Current checkpoint:** Hermes tool setup completed successfully. The resume report records completed collection installs, a passed Python dependency check and `TOOLS_FOUND`. Read the [observed result](#observed-hermes-tool-setup); no repeat installation is needed.
+**Current checkpoint:** Hermes tools are ready. Next, [prepare SSH-key access as `joe`](#ssh-access-for-ansible). No repeat tool installation is needed.
+
+## SSH access for Ansible
+
+**Stage 1 — connect the deployment computer to the nodes.** Password SSH worked during discovery. Ansible needs a repeatable login method. This step installs one dedicated public key, then tests key login and remote Python on all three nodes.
+
+### Understand the three parts
+
+| Part | Where it lives | Purpose |
+|---|---|---|
+| Private key: `~/.ssh/openstack-iac-lab` | Hermes only | Proves Hermes has the matching key; never copy or commit this file |
+| Public key: `~/.ssh/openstack-iac-lab.pub` | Hermes; copied into `joe`'s `~/.ssh/authorized_keys` on each node | Allows that key to log in as `joe` |
+| `ssh-agent` | Running on Hermes | Holds the unlocked key for up to four hours so SSH/Ansible can use it without repeating its passphrase |
+
+The **key passphrase** protects the private-key file. The **node password** authorizes its public-key installation. **Sudo** is a separate permission: later root tasks will still ask for the sudo password.
+
+This client login key is separate from the nodes' server host keys verified earlier. Host-key checking stays enabled.
+
+### What the script changes and checks
+
+The [SSH script](../scripts/prepare-ssh.sh) uses the same procedure for node1 `.200`, node2 `.201`, node3 `.202`:
+
+| Action | Effect |
+|---|---|
+| Create/reuse the dedicated key | Asks for a passphrase when creating it; refuses incomplete/symlinked key files and does not overwrite existing keys |
+| Unlock it with `ssh-add` | Loads the key into the agent for four hours; checks that the public key is usable |
+| Run `ssh-copy-id` | Adds only that public key to `joe`'s account; existing authorized keys remain |
+| Open a fresh SSH connection | Uses the dedicated key with password fallback disabled; checks hostname, login user and preserved management IP |
+| Run Ansible `ping` | Uses a small generated inventory with sudo disabled; checks SSH and remote Python, expecting `pong` |
+
+Ansible `ping` is not an ICMP/network ping. It runs a small Python module and may create/clean temporary module files under `joe`'s account. This step installs no node packages and changes no network, disk, sudo or SSH-server policy.
+
+### Run one block on Hermes
+
+```bash
+cd ~/git/openstack-iac-lab
+git pull --ff-only
+eval "$(ssh-agent -s)"
+bash scripts/prepare-ssh.sh joe --node all --apply
+cat build/ssh-access-summary.txt
+```
+
+**Prompts:** choose a key passphrase twice when creating the key, then enter it again when unlocking it. Enter each node's `joe` login password if `ssh-copy-id` requests it. Passwords/passphrases do not display while typing. There is no sudo prompt in this step.
+
+The `eval` line starts an agent and connects **this terminal** to it. Keep this terminal for the next Ansible step. The final `cat` only displays the summary.
+
+| Output | Meaning |
+|---|---|
+| `KEY_LOGIN_OK` | That node accepted a fresh key-only login and matched its expected identity/address |
+| Ansible `SUCCESS` and `"ping": "pong"` | SSH and remote Python worked |
+| `RESULT: SSH_READY for all` | All selected-node checks passed |
+| `STOP` | Read the failed phase; later nodes/steps were not attempted. Earlier public-key additions remain |
+
+Latest summary: **`build/ssh-access-summary.txt`**. Full log: `build/ssh-access-report.txt`. The key stays outside Git; reports and the test inventory are in ignored, private `build/` files.
+
+**Checkpoint:** share the summary before applying host configuration. The script has local fixture checks; it has not yet run on the lab. Tracked/generated host inventories now select this dedicated key; workload VM keys remain a separate later input.
+
+<details>
+<summary>Later verification, agent lifetime and references</summary>
+
+`--node node2` selects one node for a targeted retry. Without `--apply`, the script unlocks the existing key and repeats verification without creating a key or installing a public key. It never removes old host-key entries or disables host-key checking. An unknown/changed server key needs its own console fingerprint review.
+
+After four hours, or from a new terminal, start an agent and unlock the existing key before Ansible:
+
+```bash
+eval "$(ssh-agent -s)"
+ssh-add -t 4h ~/.ssh/openstack-iac-lab
+```
+
+That does not create another key or reinstall it on nodes. The passphrase is still needed to unlock the file; only the agent's unlocked copy expires. Existing unrelated keys/agents are not deleted by this script.
+
+- [OpenSSH ssh-agent](https://man.openbsd.org/ssh-agent)
+- [OpenSSH ssh-add and key lifetime](https://man.openbsd.org/ssh-add)
+- [ssh-copy-id: selected public key and authorized_keys](https://manpages.debian.org/bookworm/openssh-client/ssh-copy-id.1.en.html)
+- [Ansible ping: SSH and usable Python](https://docs.ansible.com/ansible/latest/collections/ansible/builtin/ping_module.html)
+
+</details>
 
 ## 1. Finish the Hermes tool setup
 

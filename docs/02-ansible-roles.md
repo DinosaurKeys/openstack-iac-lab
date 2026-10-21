@@ -1,5 +1,7 @@
 # Stage 2 — Ansible roles, YAML inventory, and node rebuilding
 
+**Prerequisite:** complete [Stage 1's SSH-key lesson](01-openstack-foundation.md#ssh-access-for-ansible) and review `SSH_READY` before the commands below. Host inventories select `~/.ssh/openstack-iac-lab`; keep that key unlocked in Hermes's current `ssh-agent`. Key login and sudo authorization are separate.
+
 ## Why roles?
 
 A playbook describes which hosts to work on. A role packages one responsibility: tasks, templates, handlers, and defaults. Inventory says where hosts belong; group_vars contains shared settings; host_vars contains differences such as a USB NIC's MAC address.
@@ -24,10 +26,10 @@ Run from the repository root in the kolla-iac virtual environment:
 ansible-inventory --graph
 ansible lab_nodes --list-hosts
 ansible control --list-hosts
-ansible lab_nodes -m ansible.builtin.ping
+ansible lab_nodes -m ansible.builtin.ping -e '{"ansible_become":false}'
 ```
 
-Expected: exactly node1/node2/node3 in lab_nodes and control. Hermes is not a managed lab node. Ansible's ping module tests SSH/Python operation; it is not an ICMP ping.
+Expected: exactly node1/node2/node3 in lab_nodes and control. Hermes is not a managed lab node. Ansible's ping module tests SSH/Python operation; it is not an ICMP ping. The extra variable disables sudo for this login test; later privileged playbooks use `--ask-become-pass`.
 
 The preparation inventory is intentionally smaller than Kolla's service inventory. Stage 1 generates the latter from the full installed sample, preserving its child groups. Do not use the small preparation inventory as a substitute for Kolla's complete inventory.
 

@@ -2,7 +2,7 @@
 
 Three controllers on Ubuntu 24.04, Cinder LVM, Ansible, Terraform, an application, and monitoring.
 
-**Current step: Stage 1 — Hermes tools completed; Ansible SSH access is the next lesson.** The resume run finished collection installation, Python dependency checks and tool discovery. [Read the successful result](docs/01-openstack-foundation.md#observed-hermes-tool-setup). OpenStack has not been deployed in this rebuild.
+**Current step: Stage 1 — prepare SSH-key access as `joe`.** Hermes tools are ready. The next script creates/reuses a dedicated client key, installs its public key on the three nodes and checks fresh key logins plus Ansible `ping`. [Read the short SSH lesson](docs/01-openstack-foundation.md#ssh-access-for-ansible) before running it. Its actual lab result is pending.
 
 **Latest observed result:** `RESULT: TOOLS_FOUND` on Hermes. Kolla/project collection installs and `pip check` completed. Python, Ansible, Kolla and the OpenStack client resolve inside `~/venvs/kolla-iac/bin`; SSH, Git and Terraform resolve under `/usr/bin`. This completes tool preparation, not cloud deployment. [The successful all-node USB test remains recorded](docs/00-hermes-codex-and-node-reset.md#observed-usb-link-results).
 
@@ -44,7 +44,7 @@ Follow this table **from top to bottom**, reviewing the result at each stop. Com
 | 2 · Stage 0 — **done** | `reset-ceph.sh` removed the recorded allocations | Release SATA disks retained by the old deployment | All three report CLEANED; Ubuntu backing unchanged |
 | 3 · Stage 0 — **links done; allocation details pending** | Record no static users in `.150–.199`; settle pool size and `.100` DHCP binding | Three external IPs are smaller than the five-address coexistence budget | No repeat ping/link test; final cloud inputs wait for the outstanding facts |
 | 4 · Stage 1 — **done** | Resume collections completed; short summary reviewed | Finish collection installation and verify Python dependencies/tool locations | All phases COMPLETED; RESULT TOOLS_FOUND |
-| 5 · Stages 1 + 2 | Review `private/lab.yml`; prepare Hermes SSH-key access; `labctl configure --hosts-only`, `preflight`, `base` | Give Ansible verified values and a repeatable Ubuntu baseline | Correct three-node inventory, SSH and time service |
+| 5 · Stages 1 + 2 — **SSH current** | `prepare-ssh.sh joe --node all --apply`; later review `private/lab.yml`, configure, preflight and base | Establish dedicated key access before applying host roles | Review SSH_READY first; host configuration follows its remaining input checks |
 | 6 · Stages 1 + 2 | `labctl netplan`, then the console procedure in Stage 2, one node at a time | Bind each USB MAC to `ext0` and retain the original management address | SSH, DNS, default route and provider link checked |
 | 7 · Stage 1 | `labctl --ask-become-pass storage` | Create **one** `cinder-volumes` VG on the reviewed blank node3 SATA disk | node3 SATA owns Cinder; Ubuntu VG stays separate |
 | 8 · Stage 1 | `labctl init-config`, then the Kolla phases below | Deploy the control, networking, compute and volume services | Kolla checks and service lists pass |
@@ -102,7 +102,7 @@ For `first`, `app` or `monitor`, run `python scripts/labctl.py terraform NAME AC
 | Hermes public-key access to `joe` on all nodes | Password-only discovery does not establish unattended Ansible SSH |
 | Non-overlapping tenant CIDRs, HCP organization/workspaces and scoped cloud credentials | These depend on your network and accounts |
 
-**Current checkpoint: row 4 passed.** Read the [recorded result](docs/01-openstack-foundation.md#observed-hermes-tool-setup). No repeat installation is needed. The next lesson prepares Ansible SSH access as `joe`; cloud/node configuration still needs its reviewed inputs.
+**Current checkpoint: row 5, SSH access only.** Read the [SSH lesson and one command block](docs/01-openstack-foundation.md#ssh-access-for-ansible), then review `build/ssh-access-summary.txt`. Sudo remains password-protected; node/cloud configuration still needs reviewed inputs.
 
 <details>
 <summary>Reference: first checkout and initial discovery</summary>

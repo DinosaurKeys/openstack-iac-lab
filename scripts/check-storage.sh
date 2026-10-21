@@ -1,31 +1,46 @@
 #!/usr/bin/env bash
-# Stage 0: one storage inspection for all three nodes, driven from Hermes.
+# Stage 0: inspect one selected node or all three, driven from Hermes.
 # Disk commands inspect only. --install-tools permits missing diagnostic packages.
 set -euo pipefail
 
 usage() {
-  printf 'Usage: bash scripts/check-storage.sh SSH_USERNAME [--install-tools]\n'
-  printf 'Example: bash scripts/check-storage.sh joe --install-tools\n'
-  printf 'Checks node1/node2/node3 and saves one private report on Hermes.\n'
+  printf 'Usage: bash scripts/check-storage.sh SSH_USERNAME [--node node1|node2|node3|all] [--install-tools]\n'
+  printf 'One-node example: bash scripts/check-storage.sh joe --node node1\n'
+  printf 'All nodes: bash scripts/check-storage.sh joe --install-tools\n'
+  printf 'Default: all three nodes. Saves one private report on Hermes.\n'
   printf 'Without --install-tools, missing tools are reported but not installed.\n'
 }
 if [[ "${1:-}" == --help || "${1:-}" == -h ]]; then
   usage
   exit 0
 fi
-if (( $# < 1 || $# > 2 )) || [[ -z "$1" ]]; then
+if (( $# < 1 )) || [[ -z "$1" ]]; then
   usage >&2
   exit 2
 fi
 ssh_user=$1
+shift
 install_tools=0
-if (( $# == 2 )); then
-  if [[ "$2" != --install-tools ]]; then
-    usage >&2
-    exit 2
-  fi
-  install_tools=1
-fi
+selected_node=all
+while (( $# )); do
+  case "$1" in
+    --install-tools) install_tools=1; shift ;;
+    --node)
+      if (( $# < 2 )); then usage >&2; exit 2; fi
+      selected_node=$2
+      shift 2
+      ;;
+    --help|-h) usage; exit 0 ;;
+    *) usage >&2; exit 2 ;;
+  esac
+done
+case "$selected_node" in
+  node1) nodes=(192.168.0.200) ;;
+  node2) nodes=(192.168.0.201) ;;
+  node3) nodes=(192.168.0.202) ;;
+  all) nodes=(192.168.0.200 192.168.0.201 192.168.0.202) ;;
+  *) printf 'Unknown node: %s. Choose node1, node2, node3 or all.\n' "$selected_node" >&2; exit 2 ;;
+esac
 if [[ ! -t 0 ]]; then
   printf 'Run this script directly in an interactive Hermes terminal; SSH/sudo may need passwords.\n' >&2
   exit 2
@@ -45,6 +60,9 @@ check() {
   "$@" || rc=$?
   if (( rc != 0 )); then
     printf 'REVIEW: command exit=%s; inspect the output above.\n' "$rc"
+    if [[ "$1" == smartctl && "$rc" == 4 ]]; then
+      printf 'Meaning: a SMART request failed. Read its error separately from the main health readings; this code alone does not establish a failed disk.\n'
+    fi
     review=1
   fi
   return "$rc"
@@ -66,7 +84,7 @@ if (( install_tools == 1 )); then
   fi
 fi
 
-check 'Disk tree: identity, filesystems and mountpoints' lsblk -e7 -o NAME,PATH,SIZE,TYPE,FSTYPE,MOUNTPOINTS,MODEL,SERIAL
+check 'Disk tree: identity, filesystems and mountpoints' lsblk --width 512 -e7 -o NAME,PATH,SIZE,TYPE,FSTYPE,MOUNTPOINTS,MODEL,SERIAL
 check 'Mounted filesystems' findmnt -rn -o TARGET,SOURCE,FSTYPE
 check 'Active swap' swapon --show
 check 'Stable disk IDs' ls -l /dev/disk/by-id/
@@ -105,9 +123,9 @@ repo_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 mkdir -p "$repo_dir/build"
 report_dir=$(mktemp -d "$repo_dir/build/storage-health-$(date -u +%Y%m%dT%H%M%SZ)-XXXXXX")
 report="$report_dir/report.txt"
-printf 'Stage 0: three-node storage inspection\nUTC: %s\nInstall missing tools: %s\n' "$(date -u +%FT%TZ)" "$install_tools" > "$report"
+printf 'Stage 0: storage inspection\nSelected node(s): %s\nUTC: %s\nInstall missing tools: %s\n' "$selected_node" "$(date -u +%FT%TZ)" "$install_tools" > "$report"
 overall=0
-for ip in 192.168.0.200 192.168.0.201 192.168.0.202; do
+for ip in "${nodes[@]}"; do
   printf '\nCollecting %s@%s. SSH and sudo may each ask for this node\047s password.\n' "$ssh_user" "$ip"
   node_report="$report_dir/$ip.txt"
   if ssh -t -o BatchMode=no -o ConnectTimeout=8 -l "$ssh_user" "$ip" "$remote_command" 2>&1 | tee "$node_report"; then

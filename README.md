@@ -1,40 +1,50 @@
 # OpenStack IaC Lab
 
-A three-controller OpenStack learning lab on Ubuntu 24.04, using Kolla-Ansible, Cinder LVM, Ansible roles, Terraform modules, a Flask application, and monitoring.
+Three controllers on Ubuntu 24.04, Cinder LVM, Ansible, Terraform, an application, and monitoring.
 
-**Status: Stage 0 Ubuntu reinstalls and basic discovery have user-supplied evidence; OpenStack deployment remains untested.** Read each stage's prerequisites before running its commands. The code deliberately stops at unknown environment inputs instead of guessing.
+**Current lesson: [Stage 0 — read your storage results](docs/00-hermes-codex-and-node-reset.md#the-architecture-two-separate-disks-in-every-node).**
 
-## Start here on Hermes
+| Already completed | Still pending |
+|---|---|
+| Reinstalled all three Ubuntu nodes | Review disk-health and diagnostic findings |
+| Preserved .200 / .201 / .202 and SSH as `joe` | Provider-link and remaining network checks |
+| Collected the three-node storage report | Exact Ceph cleanup and OpenStack deployment |
+
+**What your latest output means:** Ubuntu is on NVMe; old Ceph remains on separate SATA SSDs. The collector reached all three nodes. Each NVMe self-test-log query returned an error and produced a REVIEW label. [The lesson explains the actual findings by node](docs/00-hermes-codex-and-node-reset.md#3-smart-what-the-drive-reports-about-its-health).
+
+Read the diagram first, then one result at a time. The guide uses short tables and keeps advanced details collapsed. Your existing report is enough for this lesson; collection has already completed.
+
+| Read | Learn |
+|---|---|
+| [Architecture](docs/00-hermes-codex-and-node-reset.md#the-architecture-two-separate-disks-in-every-node) | Separate Ubuntu and old Ceph disks |
+| [SSH](docs/00-hermes-codex-and-node-reset.md#1-ssh-how-one-script-reaches-all-three-nodes) | Hermes runs one inspection across the nodes |
+| [LVM](docs/00-hermes-codex-and-node-reset.md#2-disks-mounts-and-lvm-what-owns-the-space) | PV, VG, LV, mountpoints, and unallocated capacity |
+| [Health findings](docs/00-hermes-codex-and-node-reset.md#3-smart-what-the-drive-reports-about-its-health) | Actual SATA and NVMe readings by node |
+| [REVIEW labels](docs/00-hermes-codex-and-node-reset.md#4-reports-where-the-results-go-and-how-to-read-them) | Why a failed diagnostic request needs interpretation |
+| [Script by node](docs/00-hermes-codex-and-node-reset.md#5-one-script-with-a-node-selector) | One script can target node1, node2, node3, or all |
+
+<details>
+<summary>Reference: first checkout and initial discovery</summary>
+
+Run on Hermes for a first checkout:
 
 ```bash
+mkdir -p ~/git
 cd ~/git
 git clone https://github.com/DinosaurKeys/openstack-iac-lab.git
 cd openstack-iac-lab
 ```
 
-If the clone already exists, use `git pull --ff-only` inside it instead. Confirm the actual Ubuntu login username and the nodes' SSH fingerprints as [Stage 0](docs/00-hermes-codex-and-node-reset.md) explains. The completed rebuild uses `joe` on all three nodes. For initial discovery, run once on Hermes:
+For an existing checkout, use `git pull --ff-only` inside it. Preserve Hermes and the previous project. Read Stage 0's SSH identity instructions before trusting reinstalled nodes. Initial discovery uses `bash scripts/discover.sh joe`; append an IP for a targeted retry. It supports normal password login. The current rebuild has already completed discovery.
 
-```bash
-bash scripts/discover.sh joe
-```
+Reports remain in Git-ignored build/ directories. Do not commit raw reports, passwords, private keys, application credentials, or Terraform state. The preparation and generated Kolla inventories use the confirmed account `joe`.
 
-Enter each node's `joe` password when SSH prompts; typing shows no characters. No SSH key setup or `chmod` is required when invoking the script with `bash`. Initial discovery has already succeeded on all three nodes, so continue with the current storage-inspection step below. For a future targeted retry, append that node's IP; if usernames differ, supply its actual account. The wrapper equivalent for all three nodes is `python scripts/labctl.py discover --ssh-user joe`.
+Copy config/lab.yml.example to private/lab.yml only when preparing the reviewed configuration. Provider MACs, verified DNS, a selected healthy data disk, available VIP/floating IPs, workload CIDR review and the HCP state setup need actual inputs. The source refuses unknown values instead of choosing devices or addresses for you.
 
-Discovery is read-only: it records the IP/NIC/disk layout before a reinstall or verifies the fresh installations afterward. It never reinstalls a node. Reports appear under build/discovery-*; keep them private and share only the portions needed for review. It never opens a browser, reads email, installs packages on nodes, or wipes storage. Privileged disk details are skipped if passwordless sudo is unavailable; do not change sudo policy just to run discovery. Preparation and generated Kolla inventories now use the confirmed `ansible_user: joe`.
+</details>
 
-**Current step: Stage 0 storage inspection.** The separate SATA disks retained Ceph metadata when Ubuntu was reinstalled on the NVMe disks. [Stage 0 explains the cause and each check](docs/00-hermes-codex-and-node-reset.md#storage-inspection-one-script-for-all-three-nodes).
-
-Read first: [SSH connections](docs/00-hermes-codex-and-node-reset.md#1-ssh-how-one-script-reaches-all-three-nodes) · [Disk/mount/LVM ownership](docs/00-hermes-codex-and-node-reset.md#2-disks-mounts-and-lvm-what-owns-the-space) · [SMART health](docs/00-hermes-codex-and-node-reset.md#3-smart-what-the-drive-reports-about-its-health) · [The combined report](docs/00-hermes-codex-and-node-reset.md#4-reports-where-the-results-go-and-how-to-read-them).
-
-After reading the lesson, one command on Hermes collects privileged LVM, mount, stable-ID and SMART evidence from all three nodes:
-
-```bash
-bash scripts/check-storage.sh joe --install-tools
-```
-
-The flag permits installation of missing diagnostic packages; the storage checks inspect only. SSH/sudo use normal password prompts. Review the single `build/storage-health-report.txt` before proceeding to storage cleanup or provisioning.
-
-Copy config/lab.yml.example to private/lab.yml and fill verified provider MACs, DNS, data-disk identity/health, and a floating-IP range excluded from router DHCP and all existing LAN devices. Proposed workload CIDRs also need overlap review. HCP organization/local execution is an explicit setup choice; no external state is uploaded merely by cloning this repository.
+<details>
+<summary>Reference: later-stage command sequence — follow its lesson first</summary>
 
 ## Staged execution after input review
 
@@ -110,13 +120,16 @@ python scripts/labctl.py --ask-become-pass monitoring
 
 The wrapper transfers actual Terraform outputs into generated Ansible inventories. Monitoring gets the actual app private IP from the application state; it is not hardcoded. It offers no automatic full-cluster destroy or disk-wipe action. To use lower-level commands and learn each component, follow the six guides below.
 
+
+</details>
+
 ## The learning path
 
 Linux and networking establish the hosts. Ansible prepares their operating systems. Kolla-Ansible deploys OpenStack. Terraform creates cloud resources. Ansible configures applications. Prometheus and Grafana show how they behave.
 
 | Stage | Guide | Finish line |
 |---|---|---|
-| 0 | [Keep Hermes, install Codex, reset the nodes](docs/00-hermes-codex-and-node-reset.md) | Same Hermes; three clean Ubuntu nodes with their original IPs |
+| 0 | [Understand and verify the nodes](docs/00-hermes-codex-and-node-reset.md) | Original IPs, working SSH, reviewed disk layout and health findings |
 | 1 | [Three-controller OpenStack with Cinder LVM](docs/01-openstack-foundation.md) | Healthy control services, a reachable VM, and a verified volume |
 | 2 | [Reusable Ansible roles](docs/02-ansible-roles.md) | YAML inventory, common/netplan roles, and a documented node rebuild |
 | 3 | [Terraform modules and remote state](docs/03-terraform-modules.md) | Reproducible first workload using network and compute modules |
@@ -125,9 +138,9 @@ Linux and networking establish the hosts. Ansible prepares their operating syste
 
 ## Fixed addresses
 
-These values preserve the previous project's address plan. They are targets for the rebuild, not a claim about current reachability.
+The three node addresses and SSH access are confirmed by the user's reports. The API VIP remains part of the planned address scheme; its availability still needs checking.
 
-| Host | Management address | Initial roles |
+| Host | Management address | Planned OpenStack roles |
 |---|---|---|
 | node1 | 192.168.0.200/24 | Controller, network, local Glance image store |
 | node2 | 192.168.0.201/24 | Controller, network, compute |
@@ -135,9 +148,11 @@ These values preserve the previous project's address plan. They are targets for 
 | API VIP | 192.168.0.100 | Movable API address; never configure it statically on all hosts |
 | Hermes | Keep its existing address | Deployment tools and Codex; excluded from node reset |
 
-All three hosts are controllers. Compute on node2/node3 is the initial resource allocation; additional dedicated compute nodes can be added later. The storage host is **provisional until its dedicated disk passes health and ownership review**. No disk device name or serial has been invented.
+All three hosts are planned as controllers. Compute on node2/node3 is the initial resource allocation; additional dedicated compute nodes can be added later. The storage host is **provisional until its dedicated disk passes health and ownership review**. No disk device name or serial has been invented.
 
 The previous lab recorded gateway 192.168.0.1 and management NIC enp0s31f6. Verify both locally. A fresh two-NIC layout uses enp0s31f6 for management and a MAC-matched ext0 for the Neutron provider network. This removes the old br-mgmt/veth plumbing while preserving the IPs. If the actual interfaces differ, edit the examples before deployment.
+
+The following is the **planned OpenStack architecture**. This rebuild has not deployed its OpenStack services yet.
 
 ```mermaid
 flowchart TD

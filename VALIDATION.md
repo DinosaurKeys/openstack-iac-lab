@@ -1,6 +1,6 @@
 # Validation and deployment status
 
-This repository contains implementation code and learning guides. The user has completed the three Ubuntu reinstalls and run basic discovery; OpenStack deployment remains untested. Generated examples are not claimed as observed deployment results.
+This repository contains implementation code and learning guides. The user has completed the three Ubuntu reinstalls, basic discovery, and privileged storage collection. OpenStack deployment remains untested. Generated examples are not claimed as observed deployment results.
 
 ## Checked locally
 
@@ -12,12 +12,15 @@ This repository contains implementation code and learning guides. The user has c
 - Ran 11 guard tests, including a guest-volume serial/UUID association check.
 - Checked shell syntax and generated inventory membership.
 - Checked the consolidated storage collector with simulated SSH and diagnostic commands, including all-node collection, report privacy, optional tool installation, and continuation after connection/SMART flags. This is a local check, not real disk-health validation.
+- Checked explicit node1/node2/node3/all selection, invalid target rejection, and the explanatory message for SMART command exit 4 with simulated commands.
+
+The live evidence below comes from the user's earlier all-node run. The new node selector, wider table and explanatory message have local simulated checks; they have not yet been run on the real lab.
 
 GitHub Actions independently runs source checks and native Terraform provider validation without lab credentials. Read its actual run result; the presence of a workflow file is not a passing result.
 
 ## Requires the real lab
 
-The following are intentionally not claimed as tested: exact disk cleanup, SMART health, NIC driver/link behavior, Netplan application, Kolla container startup, MariaDB/RabbitMQ quorum, volume attachment, PostgreSQL data migration, application HTTP behavior, monitoring scrapes, alert firing, and controller failover.
+The following are intentionally not claimed as tested: exact disk cleanup, resolution of health/diagnostic findings, new SMART self-tests, NIC driver/link behavior, Netplan application, Kolla container startup, MariaDB/RabbitMQ quorum, volume attachment, PostgreSQL data migration, application HTTP behavior, monitoring scrapes, alert firing, and controller failover.
 
 The Cinder LVM multi-controller caveat in Kolla's documentation remains a validation gate. This implementation uses one backend host and aligned service-group membership; that design choice does not replace a live cross-compute read/write/reattach test.
 
@@ -25,9 +28,19 @@ The Cinder LVM multi-controller caveat in Kolla's documentation remains a valida
 
 The user-supplied discovery reports from 2026-10-21 confirm Ubuntu 24.04.5 on all three nodes, original management addresses, `joe` SSH access, configured gateway/DNS, synchronized clocks, /dev/kvm, actual USB NIC MACs, and disk identities. Their separate SATA disks still contain Ceph LVM volumes. This confirms identity and retained metadata; it does not establish SSD health or provider-link operation.
 
-1. Run `bash scripts/check-storage.sh joe --install-tools` once on Hermes and review its single `build/storage-health-report.txt` for privileged mount/ownership and SMART evidence.
-2. Verify USB provider links, DNS operation, the unused API VIP, and a floating-IP range excluded from router DHCP and every other LAN device.
-3. Prepare any exact disk cleanup from the reviewed report; keep storage reuse conditional on health and ownership checks.
+The user's storage run from 2026-10-21 reached all three nodes and installed smartmontools 7.4. On each node, the Ubuntu VG reports 235.42 GiB total and 135.42 GiB unallocated, with a 100 GiB root LV on NVMe. Each separate SATA disk retains a Ceph VG/LV with no unallocated VG space.
+
+| Node | Main NVMe health fields | Diagnostic finding |
+|---|---|---|
+| node1 | Critical warning 0x00; media/data-integrity errors 0; percentage used 4% | Self-test log request rejected with Invalid Field, command exit 4 |
+| node2 | Critical warning 0x00; media/data-integrity errors 0; percentage used 0% | Self-test log request rejected with Invalid Namespace or Format, command exit 4 |
+| node3 | Critical warning 0x00; media/data-integrity errors 0; percentage used 7% | Self-test log request rejected with Invalid Field, command exit 4 |
+
+All six drives report overall PASSED in this snapshot. Node1's SATA Runtime_Bad_Block raw count is 11 and remains a separate review item. Node2's SATA error log is unsupported. Historical extended self-tests completed without error on all three SATA disks; this run did not launch new tests. The UMIS NVMe error-log table rows also need interpretation. These findings do not establish a clean bill of health or authorize reuse.
+
+1. Use the visual Stage 0 lesson to understand the existing report; its collection is complete.
+2. Resolve health/diagnostic questions and verify USB provider links, DNS operation, the unused API VIP, and the floating-IP range's DHCP/device exclusions.
+3. Prepare any exact disk cleanup from the reviewed identities and a current device-use check; keep reuse conditional on the health review.
 4. Fill private/lab.yml and use the staged commands in README.md. Hermes remains intact.
 
 The storage helper provisions only an unowned blank disk. It refuses old Ceph/LVM/filesystem signatures. Exact erasure of existing storage must be prepared from the observed disk identities; the code does not guess a device or silently wipe every node.

@@ -1,6 +1,6 @@
 # Stage 0 — Understand and verify the three nodes
 
-**Current lesson:** understand the [model/capacity validation stop](#observed-stop-model-and-capacity-check), then retry Stage 0 Step 7 with the corrected script. The storage report below is already collected and reviewed. The [execution map](../README.md#execution-map-what-runs-when-and-why) shows every remaining stage, including the two-NIC layout.
+**Current lesson:** understand [why an all-node run stopped at node1](#why-the-run-stopped-at-node1), then repeat Stage 0 Step 7 with the full confirmation phrase. The storage report below is already collected and reviewed. The [execution map](../README.md#execution-map-what-runs-when-and-why) shows every remaining stage, including the two-NIC layout.
 
 | Step | Status |
 |---|---|
@@ -8,7 +8,7 @@
 | Log in as `joe` and run discovery | Completed |
 | Collect storage information from all three nodes | Completed; results explained below |
 | Resolve diagnostic warnings and review disk reuse | Pending |
-| Clean the recorded SATA Ceph allocations | First attempt stopped before erasure; corrected comparison ready for retry |
+| Clean the recorded SATA Ceph allocations | node1 checks passed on retry; incomplete confirmation cancelled removal; node2/node3 not attempted |
 | Verify two NIC paths / deploy OpenStack | Pending |
 
 ## Storage inspection: one script for all three nodes
@@ -275,9 +275,33 @@ The old code required those two fields to be identical. That makes the recorded 
 
 **Correction:** compare `lsblk` with its recorded Linux model. Keep the full SMART name as descriptive information. Preserve the exact serial, byte-capacity, stable-path, PV/VG/LV and current-use checks. No prefix matching or force override was added.
 
-The corrected helper prints expected and observed model, serial and byte capacity **before** validation. Model and capacity now have separate mismatch messages. The failed run did not show its observed byte capacity, so a current capacity match must still be established by the retry.
+The corrected helper prints expected and observed model, serial and byte capacity **before** validation. Model and capacity now have separate mismatch messages. That first failed run did not show its observed byte capacity. The later retry below confirmed node1 at 240,057,409,536 bytes; node2/node3 have not yet been reached by cleanup.
 
 **Next:** pull the corrected script and run the consolidated command below. Read each current target and command list before its per-node confirmation. A passing local test does not mean the cleanup has already succeeded on your nodes.
+
+### Why the run stopped at node1
+
+**Latest observed result:** node1's identity, ownership and current-use checks all passed. Its model, serial and **240,057,409,536-byte** capacity matched. Ubuntu was traced to NVMe. The script then displayed the removal plan and asked for confirmation.
+
+| What you entered | What this node required | Result |
+|---|---|---|
+| `ERASE` | `ERASE node1 50026B7766070422` | Confirmation did not match; no removal command ran |
+
+`--node all` selects **node1 → node2 → node3**, processed one at a time. Each node must pass its checks and complete its approved action before the wrapper proceeds. A failure or cancelled confirmation stops the run at that node. This is why node2/node3 were not attempted.
+
+`--apply` requests removal after validation and confirmation. The full phrase identifies both the host and the disk serial being approved.
+
+**Next:** run the same wrapper command below. Your script is already current at `106c457`; this documentation update does not require a script replacement. At each matching confirmation prompt, enter its **entire phrase**:
+
+| Prompt on | Full phrase to enter at that prompt |
+|---|---|
+| node1 | `ERASE node1 50026B7766070422` |
+| node2 | `ERASE node2 4P3521354988` |
+| node3 | `ERASE node3 50026B768317883A` |
+
+These phrases are responses inside the running script. Enter one when its node asks. After a successful node1 cleanup/post-check, the script connects to node2, then node3 after node2 succeeds.
+
+**Current outcome:** nothing was erased. Node1's checks passed; cleanup and all node2/node3 checks remain pending. A successful run ends with `CLEANED` or `ALREADY_BLANK` for each node, recorded in the combined report.
 
 ### Run one consolidated command
 

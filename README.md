@@ -2,11 +2,11 @@
 
 Three controllers on Ubuntu 24.04, Cinder LVM, Ansible, Terraform, an application, and monitoring.
 
-**Current step: prepare Hermes tools in Stage 1; finish the Stage 0 address plan in parallel.** Ubuntu reinstall, SSH, storage collection, old Ceph removal, passive network inspection and the temporary USB link test are complete. OpenStack has not been deployed in this rebuild.
+**Current step: Stage 1 — understand the partial Hermes tool installation.** Python tools installed, but Ansible collection setup stopped because the installer had not added the new environment to PATH. [Read what installed, why and where](docs/01-openstack-foundation.md#what-actually-installed-on-hermes). No retry is requested at this checkpoint. OpenStack has not been deployed in this rebuild.
 
-**Latest result:** all three USB NICs negotiated **1 Gb/s full duplex**, then returned to DOWN as intended. The helper verified restored IPv6 settings and unchanged management addresses/routes on every node. Physical negotiation passed; VLAN forwarding, throughput and VM traffic remain later checks. [Read the live USB results](docs/00-hermes-codex-and-node-reset.md#observed-usb-link-results). The earlier management/DNS observations remain recorded in Step 8.
+**Latest result:** Hermes installed Ansible **2.20.10**, Kolla-Ansible **22.2.1.dev24**, OpenStack client **10.4.0**, PyYAML **6.0.3** and supporting libraries in `~/venvs/kolla-iac`; pip and system certificates were updated. Collection installation stopped before doctor. The PATH correction is published but has not run on Hermes. [The successful all-node USB test remains recorded](docs/00-hermes-codex-and-node-reset.md#observed-usb-link-results).
 
-**Confirmed by Joe:** same mini switch/LAN `192.168.0.0/24`, DHCP `.2–.149`, `.100` reserved, and no static devices in `.150–.199`. He explicitly offers `.150/.151/.152`; final pool size still needs a choice because all current workloads together need five external addresses. The `.100` DHCP binding/current lease remain unspecified. [Read the ping interpretation and IP budget](docs/00-hermes-codex-and-node-reset.md#reviewed-windows-ping-and-address-budget). [Next: one Hermes preparation script](docs/01-openstack-foundation.md#next-run-prepare-the-tools-on-hermes).
+**Confirmed by Joe:** same mini switch/LAN `192.168.0.0/24`, DHCP `.2–.149`, `.100` reserved, and no static devices in `.150–.199`. He explicitly offers `.150/.151/.152`; final pool size still needs a choice because all current workloads together need five external addresses. The `.100` DHCP binding/current lease remain unspecified. [Read the ping interpretation and IP budget](docs/00-hermes-codex-and-node-reset.md#reviewed-windows-ping-and-address-budget).
 
 ## Two NICs per node
 
@@ -43,7 +43,7 @@ Follow this table **from top to bottom**, reviewing the result at each stop. Com
 | 1 · Stage 0 — **done** | Ubuntu install, discovery and `check-storage.sh` | Establish actual host, disk and NIC identities | Three reports reviewed; IPs preserved |
 | 2 · Stage 0 — **done** | `reset-ceph.sh` removed the recorded allocations | Release SATA disks retained by the old deployment | All three report CLEANED; Ubuntu backing unchanged |
 | 3 · Stage 0 — **links done; allocation details pending** | Record no static users in `.150–.199`; settle pool size and `.100` DHCP binding | Three external IPs are smaller than the five-address coexistence budget | No repeat ping/link test; final cloud inputs wait for the outstanding facts |
-| 4 · Stage 1 — **next runnable step** | `bash scripts/prepare-hermes.sh` | Install isolated tools, record Python versions and run doctor in one Hermes-only script | Read `build/hermes-tools-report.txt`; Terraform needed by Stage 3 |
+| 4 · Stage 1 — **partial; review now** | Python tools installed; collection setup stopped at a PATH defect | Understand the installed packages and failure before retrying | Python tools present; collections incomplete, doctor not reached; repair not yet run on Hermes |
 | 5 · Stages 1 + 2 | Review `private/lab.yml`; prepare Hermes SSH-key access; `labctl configure --hosts-only`, `preflight`, `base` | Give Ansible verified values and a repeatable Ubuntu baseline | Correct three-node inventory, SSH and time service |
 | 6 · Stages 1 + 2 | `labctl netplan`, then the console procedure in Stage 2, one node at a time | Bind each USB MAC to `ext0` and retain the original management address | SSH, DNS, default route and provider link checked |
 | 7 · Stage 1 | `labctl --ask-become-pass storage` | Create **one** `cinder-volumes` VG on the reviewed blank node3 SATA disk | node3 SATA owns Cinder; Ubuntu VG stays separate |
@@ -102,7 +102,7 @@ For `first`, `app` or `monitor`, run `python scripts/labctl.py terraform NAME AC
 | Hermes public-key access to `joe` on all nodes | Password-only discovery does not establish unattended Ansible SSH |
 | Non-overlapping tenant CIDRs, HCP organization/workspaces and scoped cloud credentials | These depend on your network and accounts |
 
-**Current checkpoint: row 4 can run independently of row 3's remaining address details.** Read the [Hermes preparation lesson](docs/01-openstack-foundation.md#next-run-prepare-the-tools-on-hermes), run its one script, and review the report. Cloud/node configuration still waits for reviewed inputs. The completed ping/link checks need no repeat.
+**Current checkpoint: review row 4's partial result.** Read [what actually installed](docs/01-openstack-foundation.md#what-actually-installed-on-hermes). This review does not ask for a repeat installation, network test or deployment. Cloud/node configuration still waits for reviewed inputs.
 
 <details>
 <summary>Reference: first checkout and initial discovery</summary>

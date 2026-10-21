@@ -1,5 +1,7 @@
 # Stage 1 — Three controllers, two computes, one Cinder LVM host
 
+**Current checkpoint:** Hermes installed the Python tools, then stopped while installing Ansible collections. Start with [what actually installed and why](#what-actually-installed-on-hermes). No new command is needed to understand this result.
+
 ## Understand the roles first
 
 A controller hosts cloud-management services: authentication, APIs, scheduling, cloud records, and service messaging. Compute hosts run QEMU/KVM instances. The volume host supplies persistent disks. A host can perform several roles; controller count does not determine storage replication.
@@ -24,9 +26,47 @@ Quorum protects agreement on control state. It does not recover a lost local dis
 
 ## 1. Freeze the toolchain without changing the old project
 
+### What actually installed on Hermes
+
+**Purpose of this step:** equip Hermes to run later infrastructure tasks. Think of installing PowerCLI on a management VM: the tools live on the management computer. Installation alone does not create the infrastructure they will manage.
+
+Your report started at `2026-10-21T19:47:23Z`. It confirms a **partial setup**, with these completed changes:
+
+| Installed or changed | Plain purpose | Location / observed version |
+|---|---|---|
+| Project Python environment | A separate directory containing this project's Python and packages; it is not a VM or container | `/home/joe/venvs/kolla-iac` |
+| `pip` | Downloads and installs Python packages into that environment | Updated from 24.0 to **26.2.2** inside the environment |
+| `ansible-core` | Reads YAML playbooks/roles and runs their tasks on selected machines, usually over SSH | **2.20.10**, inside the environment |
+| `kolla-ansible` | Provides the playbooks and command used later to install OpenStack services in containers | **22.2.1.dev24**, from pinned commit `15ce36696a21356eb59abb4473e210f13cf7c98c` |
+| `python-openstackclient` | Provides the `openstack` command for later API operations such as creating networks, VMs and volumes | **10.4.0**, inside the environment |
+| `PyYAML` | Lets our Python scripts read YAML configuration files | **6.0.3**, inside the environment |
+| Supporting Python libraries | Building blocks for the above tools: API requests, authentication, templates and cryptography | Includes `openstacksdk` **4.21.0**, Jinja2, requests and other dependencies |
+| Ubuntu `ca-certificates` | Updates the system's trusted HTTPS certificate authorities | Upgraded to **20260816ubuntu0.24.04.1** on Hermes |
+
+**What was already there?** Git, curl, Python development/venv packages, GCC and the listed development libraries were already at the requested versions. APT reports **1 upgraded, 0 newly installed, 0 removed and 69 not upgraded**. It refreshed package indexes; it did not perform a full system upgrade. Repository lines mentioning Docker or HashiCorp are index checks, not evidence of installing Docker or Terraform in this run.
+
+**Why so many package names?** Pip automatically installs dependencies. For example, the OpenStack client uses `openstacksdk` and authentication libraries; Kolla/Ansible use YAML and template libraries. A client library named after an OpenStack service does not install that service's server. The terminal transcript is a dependency/download log, not a new list of cloud services.
+
+### Why the setup stopped
+
+| Phase | Observed outcome |
+|---|---|
+| Check/install Ubuntu prerequisites | Completed; only the certificate package was upgraded |
+| Create/use the project environment and install Python tools | Completed; the log says `Successfully installed ...` |
+| Kolla's Ansible Galaxy collection installation | **Stopped:** `[Errno 2] No such file or directory: 'ansible-galaxy'` |
+| Project collection installation, Python version report and doctor | Not reached in this run |
+
+**The script defect:** it called Kolla by its full path, but had not added `~/venvs/kolla-iac/bin` to **PATH**. PATH is the list of directories searched when a program calls another command by name. Kolla's dependency installer calls `ansible-galaxy` by name, so it could not locate the new environment's command. The wrapper added that PATH entry only after bootstrap, which was too late.
+
+The [bootstrap script](../scripts/bootstrap-hermes.sh) now exports the environment's `bin` directory before `kolla-ansible install-deps`. This fixes the command-search ordering. It does not mean that the repair has already run on Hermes or that collection installation is complete. [The selected Kolla source](https://github.com/openstack/kolla-ansible/blob/15ce36696a21356eb59abb4473e210f13cf7c98c/kolla_ansible/utils.py) shows the child `ansible-galaxy` call.
+
+**Scope of this run:** it installed/updated software on Hermes. The script did not SSH to node1/node2/node3, change their networking or disks, install cloud services there, create VMs, or install Codex. Terraform was not installed by this script. No cluster deployment was attempted.
+
+**Where we are:** Python tools installed; collections incomplete; doctor not run. Review this explanation before any retry. There is no new execution instruction at this checkpoint.
+
 ### Next run: prepare the tools on Hermes
 
-**Stage 1 — prepare the deployment computer.** Node identity, old-Ceph cleanup and USB physical testing are complete. The remaining address-allocation details do not block installing tools on Hermes. This step installs software; it does not log into or configure the nodes.
+**Reference for the attempted preparation step.** The actual partial result and cause are recorded above. Node identity, old-Ceph cleanup and USB physical testing are complete. The remaining address-allocation details do not block installing tools on Hermes. This step installs software; it does not log into or configure the nodes.
 
 Think of Hermes as the management workstation. Ansible will apply host configuration, Kolla-Ansible will install OpenStack, and the OpenStack client will call its APIs. Installing those tools does not yet run those operations.
 
@@ -40,7 +80,10 @@ Think of Hermes as the management workstation. Ansible will apply host configura
 
 The [preparation wrapper](../scripts/prepare-hermes.sh) calls the existing [bootstrap installer](../scripts/bootstrap-hermes.sh), records output, and runs doctor with the new environment on PATH. It requires the hostname `hermes` and an interactive terminal. Existing `~/venvs/kolla` and `/etc/kolla` are outside its targets. It does not install Codex or modify AI settings.
 
-**Run once from a terminal on Hermes**, even if your current directory is `build/`:
+<details>
+<summary>Original preparation command — reference, not a retry instruction</summary>
+
+The command used for the attempted installation was run from Hermes:
 
 ```bash
 cd ~/git/openstack-iac-lab
@@ -49,6 +92,8 @@ bash scripts/prepare-hermes.sh
 ```
 
 Enter **Hermes's sudo password** when asked. Package download/installation may take several minutes. You do not need to activate a virtual environment first; the script uses the intended environment explicitly. It does not change the parent terminal's environment.
+
+</details>
 
 | Result | Interpretation |
 |---|---|
@@ -61,7 +106,7 @@ Enter **Hermes's sudo password** when asked. Package download/installation may t
 
 The latest combined report is **`build/hermes-tools-report.txt`**. Timestamped logs and `python-versions.txt` live in `build/hermes-tools-<timestamp>-<suffix>/`, with private file/directory permissions. Review the report's final doctor/result section together. No raw report belongs in public Git.
 
-**Validation status:** shell/source checks and isolated wrapper simulations are local checks. The actual package install, dependency resolution and executable paths on Hermes need the user's run. Final VIP/pool configuration, SSH keys for Ansible, disk-health review and node preparation remain later checkpoints.
+**Validation status:** the uploaded report confirms the Python package installation and the PATH-related stop. The PATH correction has a local child-command lookup check and shell/source validation; the corrected dependency installation and doctor remain untested on Hermes. Final VIP/pool configuration, SSH keys for Ansible, disk-health review and node preparation remain later checkpoints.
 
 <details>
 <summary>Reference: individual installation commands and later configuration generation</summary>

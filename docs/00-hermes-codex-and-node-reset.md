@@ -30,21 +30,15 @@ flowchart TD
 
 ## 1. Inspect first — on Hermes
 
-After pulling this repository, verify SSH access with the account actually created during Ubuntu installation. The script takes that username as its first argument and optional node IPs afterward. Node1's reinstalled account is confirmed as `joe`; on Hermes run:
-
-```bash
-bash scripts/discover.sh joe 192.168.0.200
-```
-
-SSH may ask for node1's `joe` password. No characters appear while typing. The script permits password login as well as existing SSH keys; it does not require `ssh-copy-id`, passwordless sudo, or executable permission when run through `bash`. Keep SSH host-key checking enabled. If the key changed after reinstalling, follow section 3 before trying again.
-
-It writes private reports under build/discovery-*. With no IP arguments it visits all three nodes, using the specified account. Only after confirming that account on each node and checking the new host fingerprints, collect all three:
+After pulling this repository, verify SSH access with the account actually created during Ubuntu installation. The completed rebuild uses `joe` on all three nodes. The script takes that username as its first argument, visits all three nodes, and optionally accepts node IPs for targeted retries. For initial discovery, run once on Hermes:
 
 ```bash
 bash scripts/discover.sh joe
 ```
 
-If usernames differ, run the collector separately for each IP with its actual username. You can also use `python scripts/labctl.py discover --ssh-user joe 192.168.0.200`. Discovery skips privileged disk details if passwordless sudo is unavailable; ordinary hardware/network reports are still collected. A failed connection prints the account/IP and exits unsuccessfully; any report for that failed node may be incomplete.
+SSH may ask for each node's `joe` password. No characters appear while typing. The script permits password login as well as existing SSH keys; it does not require `ssh-copy-id`, passwordless sudo, or executable permission when run through `bash`. Keep SSH host-key checking enabled. If a key changed after reinstalling, follow section 3 before trying again.
+
+It writes private reports under build/discovery-*. Initial discovery is already complete in this rebuild; continue to the storage inspection below. For a targeted retry, append an IP, for example `bash scripts/discover.sh joe 192.168.0.200`. If future usernames differ, supply the selected node's actual account. The wrapper equivalent for all three nodes is `python scripts/labctl.py discover --ssh-user joe`. Discovery skips privileged disk details if passwordless sudo is unavailable; ordinary hardware/network reports are still collected. A failed connection prints the account/IP and exits unsuccessfully; any report for that failed node may be incomplete.
 
 The user's discovery reports from 2026-10-21 confirm successful `joe` logins on all three nodes, Ubuntu 24.04.5 LTS, preserved management IPs on enp0s31f6, gateway and configured DNS 192.168.0.1, synchronized clocks, and the presence of /dev/kvm. Both preparation and generated Kolla inventories now use `joe`.
 
@@ -54,7 +48,34 @@ Record the current OS/NIC/disk information before reinstalling when possible. If
 
 Make a private record with one row per disk: host, model, serial, stable by-id path, size, current partitions/mounts, intended OS/data use. The old README reports prior disk-health findings; a new use as Cinder storage does not make an unhealthy disk safe.
 
-Before reuse, run read-only SMART reporting for each **identified** physical data disk, for example `sudo smartctl -a /dev/disk/by-id/VERIFIED_ID`. The suffix is deliberately unknown. Do not replace it with a guessed `/dev/sda`. Review SMART errors and any completed self-test results before selecting the storage disk.
+### Storage inspection: one script for all three nodes
+
+**Current chapter: Stage 0.** Discovery is complete. Its remaining storage question is why Ceph still appears after reinstalling Ubuntu, and whether the old data disks are suitable for reuse.
+
+The installer recreated Ubuntu on each NVMe disk. The separate SATA disk retained its Ceph volume group and logical volume. Linux's LVM tools discover that metadata at boot and can activate its mappings even though the old Ceph software has not been redeployed. A `ceph_bluestore` entry therefore shows retained storage, not proof that the old Ceph cluster is running. Think of reinstalling ESXi on a boot disk while a separate datastore disk retains its metadata.
+
+`scripts/check-storage.sh` replaces manual SSH/package/health commands on each node. It runs sequentially from Hermes against .200, .201 and .202 using the username you supply. It discovers actual physical disks and inspects both OS and data disks.
+
+| Check | What it teaches us | Why it matters |
+|---|---|---|
+| `lsblk`, `findmnt`, `swapon`, stable by-id links | Physical disks, mounted filesystems, root/swap dependencies and identities | Identify which storage belongs to Ubuntu and which retains Ceph |
+| `pvs`, `vgs`, `lvs` | Disk → volume group → logical volume relationships | Establish storage ownership and capacity before choosing any cleanup target |
+| `wipefs --no-act` | Existing filesystem/partition/LVM signatures | Inspect retained metadata without erasing signatures |
+| `smartctl -a` | Device health attributes and existing error/self-test logs | Decide whether a disk needs further testing or replacement before Cinder uses it |
+
+The `--install-tools` flag permits apt to install missing `smartmontools`/`lvm2` packages. Without that flag, missing commands appear in the report and nothing is installed. Its disk commands inspect only: it does not start a SMART self-test, remove Ceph, create LVM volumes, change networking, or deploy OpenStack. Root access is needed for complete disk evidence, so it uses normal sudo prompts. Passwords are entered in the terminal and are not stored by the script. No sudo-policy change is needed.
+
+After updating your clone, run **once on Hermes**, in an interactive terminal at the repository root:
+
+```bash
+bash scripts/check-storage.sh joe --install-tools
+```
+
+SSH and sudo may each ask for the node's `joe` password. A sudo prompt is not a second SSH failure. The script keeps processing the other nodes if a command or connection fails. It prints progress and writes one combined private report at `build/storage-health-report.txt`, plus separate per-node reports in the timestamped run directory. Share the single combined report for review instead of manually collecting each command's output.
+
+`COLLECTED` means the node's inspection command returned zero; it is not a certificate of disk health. `REVIEW` means a command or connection returned nonzero. SMART exit codes are a bitmask: a nonzero result can record health/error-history flags as well as command/access problems. Keep its output for interpretation. The script reports these flags instead of stopping before the remaining nodes are inspected. Old Ceph metadata remains pending exact cleanup review, and disk reuse remains pending health review. Re-running this inspection creates another report; already-installed diagnostic tools are left as they are.
+
+Stop at report review. The finish line for this step is a reviewed map of OS versus data disks and a health decision for the proposed Cinder host. No second Ubuntu reinstall is needed merely because Ceph metadata remains on the separate SATA disks.
 
 ## 2. Reinstall Ubuntu — at each node's console
 
@@ -158,5 +179,7 @@ If networking fails after the install, fix it from the node's console. If a disk
 - [Linux sandbox and Ubuntu AppArmor](https://learn.chatgpt.com/docs/sandboxing)
 - [virt-sysprep purpose](https://libguestfs.org/virt-sysprep.1.html)
 - [cloud-init CLI](https://docs.cloud-init.io/en/latest/reference/cli.html)
+- [SMART status bitmask definitions](https://github.com/smartmontools/smartmontools/blob/main/src/smartctl.h)
+- [wipefs inspection mode](https://github.com/util-linux/util-linux/blob/master/misc-utils/wipefs.8.adoc)
 
 Next: [Stage 1](01-openstack-foundation.md).

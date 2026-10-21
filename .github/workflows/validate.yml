@@ -20,7 +20,9 @@ jobs:
         run: |
           python scripts/check-repository.py
           python -m unittest discover -s tests -v
-          bash -n scripts/discover.sh scripts/bootstrap-hermes.sh ansible/roles/node_exporter/files/cinder-vg-metrics.sh
+          for script in scripts/*.sh ansible/roles/node_exporter/files/cinder-vg-metrics.sh; do
+            bash -n "$script"
+          done
       - name: Check Ansible playbooks
         run: |
           for playbook in ansible/playbooks/*.yml; do

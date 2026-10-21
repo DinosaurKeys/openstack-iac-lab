@@ -2,7 +2,7 @@
 
 A three-controller OpenStack learning lab on Ubuntu 24.04, using Kolla-Ansible, Cinder LVM, Ansible roles, Terraform modules, a Flask application, and monitoring.
 
-**Status: implementation ready for review and lab validation, not a record of a completed deployment.** Nothing in this repository has been run on the physical nodes. Read each stage's prerequisites before running its commands. The code deliberately stops at unknown environment inputs instead of guessing.
+**Status: Stage 0 Ubuntu reinstalls and basic discovery have user-supplied evidence; OpenStack deployment remains untested.** Read each stage's prerequisites before running its commands. The code deliberately stops at unknown environment inputs instead of guessing.
 
 ## Start here on Hermes
 
@@ -12,15 +12,23 @@ git clone https://github.com/DinosaurKeys/openstack-iac-lab.git
 cd openstack-iac-lab
 ```
 
-If the clone already exists, use `git pull --ff-only` inside it instead. Confirm the actual Ubuntu login username and the node's SSH fingerprint as [Stage 0](docs/00-hermes-codex-and-node-reset.md) explains. For node1, where the reinstalled account has been confirmed as `joe`, run:
+If the clone already exists, use `git pull --ff-only` inside it instead. Confirm the actual Ubuntu login username and the nodes' SSH fingerprints as [Stage 0](docs/00-hermes-codex-and-node-reset.md) explains. The completed rebuild uses `joe` on all three nodes. For initial discovery, run once on Hermes:
 
 ```bash
-bash scripts/discover.sh joe 192.168.0.200
+bash scripts/discover.sh joe
 ```
 
-Enter node1's `joe` password when SSH prompts; typing shows no characters. No SSH key setup or `chmod` is required when invoking the script with `bash`. The rebuild has now confirmed `joe` and successful password-based discovery on all three nodes. Use `bash scripts/discover.sh joe` to collect all three after their SSH fingerprints have been checked. If future usernames differ, collect each IP separately with its actual account. The wrapper equivalent is `python scripts/labctl.py discover --ssh-user joe 192.168.0.200`.
+Enter each node's `joe` password when SSH prompts; typing shows no characters. No SSH key setup or `chmod` is required when invoking the script with `bash`. Initial discovery has already succeeded on all three nodes, so continue with the current storage-inspection step below. For a future targeted retry, append that node's IP; if usernames differ, supply its actual account. The wrapper equivalent for all three nodes is `python scripts/labctl.py discover --ssh-user joe`.
 
 Discovery is read-only: it records the IP/NIC/disk layout before a reinstall or verifies the fresh installations afterward. It never reinstalls a node. Reports appear under build/discovery-*; keep them private and share only the portions needed for review. It never opens a browser, reads email, installs packages on nodes, or wipes storage. Privileged disk details are skipped if passwordless sudo is unavailable; do not change sudo policy just to run discovery. Preparation and generated Kolla inventories now use the confirmed `ansible_user: joe`.
+
+**Current step: Stage 0 storage inspection.** The separate SATA disks retained Ceph metadata when Ubuntu was reinstalled on the NVMe disks. [Stage 0 explains the cause and each check](docs/00-hermes-codex-and-node-reset.md#storage-inspection-one-script-for-all-three-nodes). One command on Hermes collects privileged LVM, mount, stable-ID and SMART evidence from all three nodes:
+
+```bash
+bash scripts/check-storage.sh joe --install-tools
+```
+
+The flag permits installation of missing diagnostic packages; the storage checks inspect only. SSH/sudo use normal password prompts. Review the single `build/storage-health-report.txt` before proceeding to storage cleanup or provisioning.
 
 Copy config/lab.yml.example to private/lab.yml and fill verified provider MACs, DNS, data-disk identity/health, and a floating-IP range excluded from router DHCP and all existing LAN devices. Proposed workload CIDRs also need overlap review. HCP organization/local execution is an explicit setup choice; no external state is uploaded merely by cloning this repository.
 
@@ -157,6 +165,8 @@ Kolla's Cinder guide still flags multi-controller LVM issues. This guide deliber
 ## Work in small steps
 
 Every guide explains the cause, the change, the expected effect, the checks, and how to stop or recover. Example output describes an acceptance condition; it is never presented as observed output.
+
+Each learning session names the current stage, explains the cause using observed evidence, describes its script or role, then runs one consolidated stage command and reviews its report. Repeated operations belong in the repository instead of per-node terminal instructions.
 
 Keep secrets outside Git: Kolla passwords, OpenStack application credentials, SSH private keys, Terraform state/plan files, and database passwords. AGENTS.md carries the same working rules into Codex sessions.
 

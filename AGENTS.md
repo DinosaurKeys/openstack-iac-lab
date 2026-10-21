@@ -16,5 +16,6 @@ Build a documented three-controller OpenStack lab on Ubuntu 24.04. Teach Ansible
 8. Keep credentials and Terraform state out of Git. Do not print secret-bearing files. Do not access browser sessions, email, or unrelated directories for this project.
 9. Record actual execution results and unresolved problems. Never describe draft code as a completed deployment.
 10. Use six core guides. Add detail within the relevant guide instead of creating a chapter for every command.
+11. Start each teaching step by naming the current stage and explaining the cause shown by the actual evidence. Consolidate repeated node operations in scripts/ or Ansible roles, explain their inputs/effects/output, then give one stage command. Review its report together before moving on. Avoid repeated per-node command lists and large terminal paste blocks; learning the system is the objective.
 
 These instructions express the workflow; they are not a security sandbox. Codex permissions and OS/network access must also be configured appropriately.

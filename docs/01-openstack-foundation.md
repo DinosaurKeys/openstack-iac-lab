@@ -1,6 +1,6 @@
 # Stage 1 — Three controllers, two computes, one Cinder LVM host
 
-**Current checkpoint:** Hermes tools are ready. The SSH script created its dedicated key, then stopped while unlocking it. [Read the observed stop and the one report command](#current-ssh-stop-key-created-unlock-failed). No repeat tool installation is needed.
+**Current checkpoint:** Hermes tools are ready. The SSH key was created, but loading it into the agent stopped without a saved error. [Read the result and the direct Hermes-only check](#current-ssh-stop-key-created-unlock-failed). No repeat tool installation is needed.
 
 ## SSH access for Ansible
 
@@ -13,20 +13,36 @@ Your summary started at `2026-10-21T21:09:40Z`:
 | Phase | Observed result | Meaning |
 |---|---|---|
 | Create dedicated key | `COMPLETED` | The key-generation command succeeded on Hermes |
-| Unlock key for four hours | `STOP` | `ssh-add` failed; its error is missing from the short summary |
+| Unlock key for four hours | `STOP` | The script reported failure; the full-log extract also contains no error text |
 | Public-key installation, node login and Ansible `ping` | Not reached in this run | The script stopped before contacting node1; `--node all` does not skip a failed prerequisite |
 
-**Why unlock first?** The private key stays on Hermes. The script loads it into `ssh-agent` so the later key-only SSH tests can use it. Creation succeeded; loading it did not. We need the command's actual error before choosing a fix.
+**What were we trying to do?** `ssh-add` loads the existing key into Hermes's `ssh-agent` for four hours. That lets later SSH/Ansible commands use the key without repeatedly asking for its passphrase. This local prerequisite comes before any node connection.
 
-The sentence **“Earlier public-key additions remain”** is generic script wording. It does not establish that any public key was copied in this run. The node-copy loop comes after unlocking; previous authorized keys, if any, are not removed.
+**What does your latest output mean?** `sed` worked: the heading and `STOP` are the only saved lines in that section. They confirm where the script stopped, but give no cause. OpenSSH reads passphrases directly from the terminal, so those prompts can be absent from the saved log. The original script also omitted command exit codes; it now records them separately from the logging command's status.
 
-**Next — run this on Hermes from `~/git/openstack-iac-lab`:**
+The old sentence **“Earlier public-key additions remain”** was generic wording. No node-copy phase was reached in this run. The corrected script reports whether any public-key installation was attempted.
+
+**Next — run these two lines directly in the same Hermes terminal:**
 
 ```bash
-sed -n '/^--- Unlock key for four hours ---/,/^STOP:/p' build/ssh-access-report.txt
+ssh-add -v -t 4h ~/.ssh/openstack-iac-lab
+printf 'ssh-add exit=%s\n' "$?"
 ```
 
-`sed -n` prints only the saved log section from the unlock heading through `STOP`. This command reads the existing report and changes nothing. Share that output before retrying setup. Keep the existing key; the summary alone cannot identify a passphrase, file-permission or agent problem.
+| Line | Purpose / effect |
+|---|---|
+| `ssh-add -v -t 4h ...` | Show diagnostics while loading the existing key for four hours; if successful, changes only the agent's temporary key state on Hermes |
+| `printf ... "$?"` | Print the previous command's exit code immediately, before another command replaces it |
+
+**If prompted:** enter the key passphrase chosen during key creation, at the terminal prompt. It is not the node's `joe` account password. Typed characters remain hidden. This check creates no key, installs no package and contacts no node. It uses the existing agent; it does not start a new one.
+
+| `ssh-add exit=` | Meaning |
+|---|---|
+| `0` | The load command succeeded; node key installation is still a later step |
+| `1` | The command failed; review the visible message/prompt outcome |
+| `2` | `ssh-add` could not contact the agent |
+
+Share the terminal output and exit code before another all-node run. Keep the existing key. A passphrase, permission or agent cause has not yet been established. Source: [OpenSSH ssh-add: terminal prompts, lifetime and exit status](https://man.openbsd.org/ssh-add).
 
 ### Understand the three parts
 
@@ -77,10 +93,11 @@ The `eval` line starts an agent and connects **this terminal** to it. Keep this 
 | Ansible `SUCCESS` and `"ping": "pong"` | SSH and remote Python worked |
 | `RESULT: SSH_READY for all` | All selected-node checks passed |
 | `STOP` | Read the failed phase; later nodes/steps were not attempted. Keys installed during earlier completed phases are not rolled back |
+| `command_exit=...; log_exit=...` | Updated failure reports distinguish the command result from the `tee` log result; `0` means success for that command |
 
 Latest summary: **`build/ssh-access-summary.txt`**. Full log: `build/ssh-access-report.txt`. The key stays outside Git; reports and the test inventory are in ignored, private `build/` files.
 
-**Checkpoint:** the first supplied live run created the key but stopped during unlock, as recorded above. No `SSH_READY` result has been observed. Tracked/generated host inventories select this dedicated key; workload VM keys remain a separate later input. Review the actual unlock error before another run or host configuration.
+**Checkpoint:** the first supplied live run created the key but stopped during unlock, as recorded above. Its full-log extract has no diagnostic text. No `SSH_READY` result has been observed. Tracked/generated host inventories select this dedicated key; workload VM keys remain a separate later input. Review the direct check before another all-node run or host configuration. Pull the updated script before that later run; reading the log or running the direct check requires no Git update.
 
 </details>
 

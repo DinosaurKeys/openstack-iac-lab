@@ -25,7 +25,16 @@ elif name=='ip':
     print('2: enp0s31f6 inet '+ip+'/24 brd 192.168.0.255 scope global enp0s31f6')
 elif name=='ssh-add':
     if args[0]=='-l': sys.exit(2 if failure=='agent' else 1)
+    if args[0]=='-t' and failure in ['unlock','unlock-agent']:
+        if failure=='unlock-agent': print('Fixture: agent became unavailable during load',file=sys.stderr)
+        sys.exit(2 if failure=='unlock-agent' else 1)
     if args[0]=='-T' and failure=='key': sys.exit(1)
+elif name=='tee':
+    data=sys.stdin.buffer.read()
+    if failure=='log' and not data:
+        print('Fixture: log sink failed',file=sys.stderr)
+        sys.exit(9)
+    sys.exit(subprocess.run(['/usr/bin/tee',*args],input=data).returncode)
 elif name=='ssh-keygen':
     if '-f' in args and '-t' in args:
         key=Path(args[args.index('-f')+1])
@@ -86,7 +95,9 @@ class SSHAccessTests(unittest.TestCase):
             source=source.replace('key="$HOME/.ssh/openstack-iac-lab"','key="'+str(key)+'"')
             source=source.replace('"$HOME/.ssh"','"'+str(keys)+'"')
             (work/'scripts/prepare-ssh.sh').write_text(source)
-            for name in ['hostname','id','ip','ssh','ssh-copy-id','ssh-add','ssh-keygen']:
+            commands=['hostname','id','ip','ssh','ssh-copy-id','ssh-add','ssh-keygen']
+            if failure=='log': commands.append('tee')
+            for name in commands:
                 path=work/'bin'/name
                 path.write_text(f'#!{sys.executable}\n'+TOOL)
                 path.chmod(0o755)
@@ -163,10 +174,35 @@ class SSHAccessTests(unittest.TestCase):
         self.assertEqual(result.returncode,1)
         self.assertFalse(any(c[0]=='ssh-copy-id' for c in calls))
 
+    def test_silent_unlock_failure_records_status_before_any_node_action(self):
+        result,summary,calls=self.run_case(failure='unlock',key_state='absent')
+        self.assertEqual(result.returncode,1)
+        self.assertIn('Create dedicated key: COMPLETED',summary)
+        self.assertIn('Unlock key for four hours: STOPPED; command_exit=1; log_exit=0',summary)
+        self.assertIn('No public-key installation was attempted',summary)
+        self.assertNotIn('additions remain',summary)
+        self.assertNotIn('RESULT: SSH_READY',summary)
+        self.assertFalse(any(c[0] in ['ssh-copy-id','ssh','ansible'] or (c[0]=='ssh-add' and c[1]=='-T') for c in calls))
+
+    def test_unlock_agent_failure_preserves_stderr_and_exit_code(self):
+        result,summary,calls=self.run_case(failure='unlock-agent')
+        self.assertEqual(result.returncode,1)
+        self.assertIn('command_exit=2; log_exit=0',summary)
+        self.assertIn('Fixture: agent became unavailable during load',result.stdout)
+        self.assertFalse(any(c[0] in ['ssh-copy-id','ssh','ansible'] for c in calls))
+
+    def test_log_failure_is_distinguished_from_successful_unlock(self):
+        result,summary,calls=self.run_case(failure='log')
+        self.assertEqual(result.returncode,1)
+        self.assertIn('command_exit=0; log_exit=9',summary)
+        self.assertNotIn('RESULT: SSH_READY',summary)
+        self.assertFalse(any(c[0] in ['ssh-copy-id','ssh','ansible'] for c in calls))
+
     def test_node2_copy_failure_stops_before_node3(self):
         result,summary,calls=self.run_case(failure='copy')
         self.assertEqual(result.returncode,1)
         self.assertIn('node2 public-key installation failed',summary)
+        self.assertIn('Any public-key additions remain',summary)
         self.assertFalse(any(c[0]=='ssh-copy-id' and c[-1].endswith('.202') for c in calls))
 
     def test_wrong_remote_hostname_stops(self):

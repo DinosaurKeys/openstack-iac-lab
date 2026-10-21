@@ -49,14 +49,22 @@ save() {
   printf '\nSummary: %s/build/ssh-access-summary.txt\nFull log: %s/build/ssh-access-report.txt\n' "$repo_dir" "$repo_dir"
 }
 stop() { printf 'STOP: %s\n' "$*" | tee -a "$report" "$summary"; save; exit 1; }
+copy_attempts=0
 step() {
   local label=$1
+  local -a phase_status
   shift
   printf '\n--- %s ---\n' "$label" | tee -a "$report"
   if "$@" 2>&1 | tee -a "$report"; then
     printf '%s: COMPLETED\n' "$label" >> "$summary"
   else
-    stop "$label failed; later steps were not attempted. Earlier public-key additions remain."
+    phase_status=("${PIPESTATUS[@]}")
+    printf '%s: STOPPED; command_exit=%s; log_exit=%s\n' "$label" "${phase_status[0]}" "${phase_status[1]}" | tee -a "$report" "$summary"
+    if (( copy_attempts == 0 )); then
+      stop "$label failed; later steps were not attempted. No public-key installation was attempted."
+    else
+      stop "$label failed; later steps were not attempted. Any public-key additions remain."
+    fi
   fi
 }
 # Exit 1 means a reachable agent with no identities; exit 2 means no usable agent.
@@ -99,6 +107,7 @@ for node in "${nodes[@]}"; do
   printf '\nNode %s/%s: %s (%s)\n' "$number" "${#nodes[@]}" "$node" "$ip"
   if (( apply )); then
     printf 'Install only the dedicated PUBLIC key. SSH may ask for joe\047s password on this node.\n'
+    copy_attempts=$((copy_attempts + 1))
     step "$node public-key installation" ssh-copy-id -i "$key.pub" -o StrictHostKeyChecking=yes \
       -o IdentitiesOnly=yes -o "IdentityFile=$key" -o ForwardAgent=no -o ConnectTimeout=8 "$ssh_user@$ip"
   fi

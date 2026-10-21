@@ -1,6 +1,6 @@
 # Validation and deployment status
 
-This repository contains implementation code and learning guides. The user has completed the three Ubuntu reinstalls, basic discovery, privileged storage collection, exact old-Ceph removal on all three nodes, and passive network inspection. OpenStack deployment remains untested. Generated examples are not claimed as observed deployment results.
+This repository contains implementation code and learning guides. The user has completed the three Ubuntu reinstalls, basic discovery, privileged storage collection, exact old-Ceph removal on all three nodes, passive network inspection, and temporary USB link measurement/restoration on all three nodes. OpenStack deployment remains untested. Generated examples are not claimed as observed deployment results.
 
 ## Checked locally
 
@@ -24,7 +24,7 @@ GitHub Actions independently runs source checks and native Terraform provider va
 
 ## Requires the real lab
 
-The following are intentionally not claimed as tested: Cinder VG provisioning, resolution of health/diagnostic findings, new SMART self-tests, NIC driver/link behavior, Netplan application, Kolla container startup, MariaDB/RabbitMQ quorum, volume attachment, PostgreSQL data migration, application HTTP behavior, monitoring scrapes, alert firing, and controller failover.
+The following are intentionally not claimed as tested: Cinder VG provisioning, resolution of health/diagnostic findings, new SMART self-tests, sustained USB NIC stability/throughput, switch/VLAN forwarding, Netplan application, Kolla container startup, MariaDB/RabbitMQ quorum, volume attachment, PostgreSQL data migration, application HTTP behavior, monitoring scrapes, alert firing, and controller failover. Basic physical USB negotiation and restoration have passed on the lab, as recorded below.
 
 The Cinder LVM multi-controller caveat in Kolla's documentation remains a validation gate. This implementation uses one backend host and aligned service-group membership; that design choice does not replace a live cross-compute read/write/reattach test.
 
@@ -49,7 +49,7 @@ All six drives report overall PASSED in this snapshot. Node1's SATA Runtime_Bad_
 
 The storage-target helper provisions only an unowned blank disk and refuses old Ceph/LVM/filesystem signatures. The separate reset-ceph helper removes only the three recorded old Ceph allocations, defaults to plan-only, requires exact host/disk/ownership/current-use checks and per-node approval for apply, and refuses new Cinder ownership. This implementation has local guard/transport validation; the latest live run completed removal and passed post-checks on all three recorded SATA disks. This does not claim that the Cinder VG was provisioned or the hardware-health findings resolved.
 
-Two NICs per node are part of the documented design: built-in management interfaces retain the original node IPs; actual USB MACs are known for the proposed ext0 provider interfaces. The new report confirms management links at 1 Gb/s full duplex, but provider interfaces remain administratively DOWN and their cable/carrier/VLAN operation is unverified. The README execution map records the completed cleanup, current network inspection and later steps requiring additional inputs.
+Two NICs per node are part of the documented design: built-in management interfaces retain the original node IPs; actual USB MACs are known for the proposed ext0 provider interfaces. Passive inspection confirmed management links at 1 Gb/s full duplex. The subsequent temporary USB test also confirmed carrier 1 and 1000 Mb/s full duplex on all three adapters, then verified restoration to DOWN and unchanged management. VLAN forwarding and workload traffic remain untested. The README execution map records these completed steps and the remaining inputs.
 
 ## First cleanup attempt: reviewed failure
 
@@ -79,20 +79,28 @@ No Cinder VG or new filesystem was created by the cleanup. Node1/node2 SATA stay
 
 The new check-network wrapper collects Hermes route selections and all three nodes' actual NIC MACs, administrative state, carrier/speed/duplex, driver, addresses, routes, configured DNS and a bounded Ubuntu hostname lookup. It uses joe SSH without sudo and has no interface-enabling, address-setting, Netplan or package-install action. It saves private reports and continues after observation/connection failures.
 
-Seven isolated simulated checks passed for target selection, quoted remote Bash syntax, private report modes, continuation after review/SSH errors and invalid options. Shell/source/link checks passed. The network script has now run on the lab, as recorded below. USB active-link testing and switch/VLAN connectivity remain pending.
+Seven isolated simulated checks passed for target selection, quoted remote Bash syntax, private report modes, continuation after review/SSH errors and invalid options. Shell/source/link checks passed. The passive network script and subsequent temporary USB link test have now run on the lab, as recorded below. Switch/VLAN forwarding and workload traffic remain pending.
 
 ## Observed network results
 
 The user's 2026-10-21 report reached all three nodes. Recorded management and USB MACs matched. Each built-in e1000e NIC is admin/operational UP with carrier 1, 1000 Mb/s full duplex and the preserved .200/.201/.202 address. Each r8152 USB NIC is administratively/operationally DOWN with no host address; sysfs carrier/speed is unavailable. Each node has gateway/DNS 192.168.0.1 and successfully resolved archive.ubuntu.com from network DNS data. No node interface/address/route/Netplan changes occurred.
 
-The report also contains ethtool netlink permission denials. The collector ran unprivileged; some get requests require privileges, but this report does not identify the denied subrequest. USB ethtool output shows Speed 1000Mb/s alongside Link detected no and admin DOWN. A usable gigabit provider link has not been established. The existing collector explicitly marks the DOWN provider state REVIEW.
+The passive report also contains ethtool netlink permission denials. The collector ran unprivileged; some get requests require privileges, but this report does not identify the denied subrequest. USB ethtool output showed Speed 1000Mb/s alongside Link detected no and admin DOWN; that snapshot did not establish active physical negotiation. The collector explicitly marked the DOWN provider state REVIEW. The later privileged activation measured actual carrier and speed successfully, as recorded below.
 
 Hermes routes to the three nodes using ens33, local source 192.168.162.130 and next hop 192.168.162.2. NAT versus another routing arrangement has not been inferred from that route alone. The original uploaded report is unchanged and is not published to the repository.
 
-## Confirmed LAN plan and pending temporary link test
+## Confirmed LAN plan and temporary link test
 
 Joe subsequently confirmed that both NICs connect to the same mini switch/LAN 192.168.0.0/24 and router DHCP serves 192.168.0.2–149. He reports a reservation at .100. Its exclusion versus MAC-binding semantics, bound device and current lease remain unknown. The proposed external allocation block .150–.199 avoids DHCP and the nodes .200–.202, but other static users are unverified. No private configuration flag or floating-pool value was automatically marked verified.
 
 The new test-provider-link wrapper/helper defaults to plan only. Apply requires exact recorded host/management/USB identity, an unused DOWN USB interface, no addresses/routes/master/uppers, networkd unmanaged status and inactive NetworkManager. It temporarily suppresses IPv6 on that USB NIC, brings it UP, reads physical negotiation, restores DOWN and the original IPv6 setting, and compares management address identity and routes. No persistent network file or management-interface setting is written. Handled interrupts enter restoration; power loss/uncatchable kills cannot guarantee cleanup. A restoration failure is a stop, never a passing result.
 
-The 31 new local tests cover identity/use/ownership refusals, plan without writes, gigabit/slower/missing-carrier outcomes, restoration after errors/interruption, changed-route rejection, failed-restoration rejection, remote helper quoting, all/single-node selection, private reports, continuation after a restored REVIEW and stop on a hard failure. These tests perform no real network mutation. The new physical USB test, VLAN forwarding and workload connectivity remain pending on the lab.
+The 31 new local tests cover identity/use/ownership refusals, plan without writes, gigabit/slower/missing-carrier outcomes, restoration after errors/interruption, changed-route rejection, failed-restoration rejection, remote helper quoting, all/single-node selection, private reports, continuation after a restored REVIEW and stop on a hard failure. These tests perform no real network mutation. The subsequent physical result is recorded below; VLAN forwarding and workload connectivity remain pending.
+
+## Completed live USB link test
+
+The user's combined report started at 2026-10-21T19:17:04Z and records node1/node2/node3 COMPLETED and LINK_OK. The recorded USB MACs matched interfaces enx00e04c557e58, enx00e04c2c1678 and enx00e04c304688 respectively. Each interface passed the networkd-unmanaged ownership guard, was temporarily enabled, and measured carrier 1, speed 1000 Mb/s and full duplex.
+
+Each USB NIC was then set DOWN, its disable_ipv6 setting restored from temporary 1 to original 0, and the helper's final checks verified unchanged management addresses/routes. This confirms basic physical negotiation at the time of the test and successful restoration on all three nodes. It does not establish sustained throughput/stability, VLAN forwarding, persistent Netplan behavior or VM connectivity. There is no reason to repeat the successful test by default.
+
+The Stage 0 lesson and README checkpoint now record completed physical testing and pending address-allocation facts: exact .100 DHCP exclusion/reservation binding and current lease, and other static users in proposed .150–.199. Scripts and configuration flags were unchanged by this documentation update. The private raw report is not published.

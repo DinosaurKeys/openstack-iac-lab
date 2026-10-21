@@ -1,6 +1,6 @@
 # Stage 0 — Understand and verify the three nodes
 
-**Current lesson:** [Step 9: USB link test and LAN address plan](#9-test-the-usb-links-and-review-the-address-plan). Joe confirms the two NICs connect to the same mini switch/LAN. The passive report showed working management/DNS and USB NICs administratively DOWN. Ceph cleanup is complete; the next test temporarily enables only the unused USB NICs and restores DOWN.
+**Current lesson:** [review the successful USB test](#observed-usb-link-results), then finish the [address plan](#address-plan-confirmed-values-and-proposals). All three USB NICs negotiated 1 Gb/s full duplex and returned to DOWN with management unchanged. Ceph cleanup is complete. Persistent networking and OpenStack deployment come later.
 
 | Step | Status |
 |---|---|
@@ -11,7 +11,7 @@
 | Clean the recorded SATA Ceph allocations | Completed on all three nodes; each post-check reports CLEANED |
 | Inspect two NIC paths | Report reviewed on all three; management UP, USB DOWN, DNS query succeeded |
 | Confirm switch/LAN and DHCP scope | Joe confirms shared switch, `192.168.0.0/24`, DHCP `.2–.149`; `.100` reservation needs clarification |
-| Measure USB carrier/speed and restore DOWN | Script locally checked; real-node run pending |
+| Measure USB carrier/speed and restore DOWN | Completed on all three: LINK_OK, 1000 Mb/s full duplex; restoration verified |
 | Configure networking / deploy OpenStack | Pending |
 
 ## Storage inspection: one script for all three nodes
@@ -429,7 +429,7 @@ The USB interfaces were administratively DOWN in the initial discovery. Detectio
 
 ## 8. Inspect the two NIC paths
 
-**Current chapter: Stage 0.** Ceph cleanup and passive network collection are complete. Read the actual results below before planning provider-link activation or persistent configuration.
+**Stage 0, completed passive inspection.** These results describe the initial DOWN USB state. The later temporary activation passed on all three nodes in [Step 9](#observed-usb-link-results).
 
 ### Observed network results
 
@@ -443,9 +443,9 @@ Your supplied 2026-10-21 network report reached all three nodes and changed no i
 
 Both recorded NIC MACs match on every node. Built-in NICs use `e1000e`; USB NICs use `r8152`. All three nodes use gateway/DNS `192.168.0.1`, and each successfully resolved `archive.ubuntu.com` using DNS data from the network.
 
-**Why REVIEW?** The script explicitly flagged each USB interface as administratively DOWN. Linux has not enabled those interfaces for traffic. Cable carrier and current usable link speed remain unverified; DOWN alone does not establish a faulty cable or adapter. [Linux distinguishes administrative and operational state](https://docs.kernel.org/networking/operstates.html).
+**Why REVIEW in that report?** The script explicitly flagged each USB interface as administratively DOWN. Linux had not enabled those interfaces for traffic. That passive inspection could not establish cable carrier or current usable link speed; DOWN alone does not establish a faulty cable or adapter. [Linux distinguishes administrative and operational state](https://docs.kernel.org/networking/operstates.html).
 
-**Why does ethtool also print 1000 Mb/s on the USB NICs?** The same output says `Link detected: no`, while sysfs carrier/speed is unavailable and the interface is DOWN. That speed field alone does not establish an active gigabit link. Read the link again after a reviewed activation; we have not established why the driver reports that particular value while inactive.
+**Why did ethtool also print 1000 Mb/s on the USB NICs?** The same output said `Link detected: no`, while sysfs carrier/speed was unavailable and the interface was DOWN. That speed field alone did not establish an active gigabit link. Step 9 subsequently measured carrier and speed with each interface UP; why the driver reported that particular value while inactive remains unexplained.
 
 **What is `netlink error: Operation not permitted`?** An ethtool query was denied under the unprivileged account. Basic management link data was still returned. The report does not identify the denied subrequest. Some [ethtool get requests require privileges](https://docs.kernel.org/networking/ethtool-netlink.html); this warning is separate from the USB admin-DOWN state and gives no new evidence of hardware failure.
 
@@ -468,9 +468,9 @@ They are addresses returned for `archive.ubuntu.com`, not extra addresses assign
 
 ### Current checkpoint before the next change
 
-Collection and interpretation are complete. Joe has since confirmed the NICs connect to the same mini switch on `192.168.0.0/24`. [Step 9](#9-test-the-usb-links-and-review-the-address-plan) now supplies the guarded temporary USB activation/measurement. Persistent naming/configuration comes later through Netplan; neither has run on the lab yet.
+Collection and interpretation are complete. Joe confirmed the NICs connect to the same mini switch on `192.168.0.0/24`. [Step 9's temporary USB activation/measurement](#observed-usb-link-results) then passed on all three. Persistent naming/configuration comes later through Netplan and has not run in this rebuild.
 
-**Remaining facts:** physical carrier and switch-port/VLAN behavior still need verification. The API VIP reservation and floating-IP pool's device exclusions also need review; the address table in Step 9 separates confirmed values from proposals.
+**Remaining facts:** switch-port/VLAN forwarding, sustained throughput and VM traffic still need verification. The API VIP reservation and floating-IP pool's device exclusions also need review; the address table in Step 9 separates confirmed values from proposals.
 
 **Cause and effect:** working SSH proves the management path reaches the node. VM floating-IP traffic will also need the USB provider path. A detected USB adapter does not establish a working cable, link speed or switch/VLAN connection.
 
@@ -546,7 +546,38 @@ Next, use that evidence to review provider links, the unused/reserved API VIP `.
 
 ## 9. Test the USB links and review the address plan
 
-**Stage 0 — physical links first.** The report found each USB NIC disabled. A disabled interface cannot establish its usable Ethernet link. We will enable it briefly, measure carrier/speed/duplex, then return it to DOWN. Persistent Netplan and OpenStack configuration come later.
+**Stage 0 — physical link test completed.** The earlier report found each USB NIC disabled. This test briefly enabled each identified USB NIC, measured its link, then restored DOWN. Persistent Netplan and OpenStack configuration come later.
+
+### Observed USB link results
+
+Your combined report started at `2026-10-21T19:17:04Z`. All three nodes completed the test:
+
+| Node | USB interface | While enabled | Final checked state |
+|---|---|---|---|
+| node1 — `.200` | `enx00e04c557e58` | Carrier 1; 1000 Mb/s; full duplex | DOWN; original IPv6 setting restored; management addresses/routes unchanged |
+| node2 — `.201` | `enx00e04c2c1678` | Carrier 1; 1000 Mb/s; full duplex | DOWN; original IPv6 setting restored; management addresses/routes unchanged |
+| node3 — `.202` | `enx00e04c304688` | Carrier 1; 1000 Mb/s; full duplex | DOWN; original IPv6 setting restored; management addresses/routes unchanged |
+
+**What changed in our understanding?** The earlier DOWN state left link operation unknown. After temporary activation, every adapter reported carrier and gigabit full-duplex negotiation. This verifies basic physical link negotiation at that moment. It does not measure sustained throughput, USB stability, VLAN forwarding or VM connectivity.
+
+| Line from your output | Meaning |
+|---|---|
+| `networkctl unmanaged` | networkd was not configuring that USB NIC; this was the expected ownership guard |
+| `USB-only disable_ipv6=1` | Temporarily prevented automatic IPv6 addresses/routes on that unused USB NIC |
+| `Measured: carrier=1; speed_Mbps=1000; duplex=full` | Physical carrier and gigabit full-duplex negotiation were observed while UP |
+| `ip link set ... down`, then `disable_ipv6=0` | Returned the tested NIC and its IPv6 setting to their original state |
+| `RESTORED ... unchanged` and `LINK_OK` | Restoration checks passed along with the link readings |
+| `Connection ... closed` | SSH ended after the completed test; it is not a failure here |
+
+**Why DOWN again?** The script intentionally reverses its temporary change. The later Netplan step will configure `ext0` persistently. Do not enable it manually or repeat the completed test just because it is DOWN now.
+
+The timestamped directories in `build/` are run history. `provider-link-report.txt` is the latest combined link report; `provider-link-20261021T191704Z-qH34bh/` is this run's historical directory. Existing discovery/storage/Ceph reports are separate completed steps, not pending work.
+
+| Checkpoint | State |
+|---|---|
+| USB physical negotiation and restoration | Complete on all three nodes |
+| `.100` reservation/exclusion and other static users in `.150–.199` | Next facts needed for the network address plan |
+| Persistent Netplan, cloud deployment and VM traffic | Later steps; not run yet |
 
 ### Address plan: confirmed values and proposals
 
@@ -577,6 +608,9 @@ flowchart TD
 
 The VIP is how clients reach OpenStack APIs. External allocation addresses are for Neutron router gateways and VM floating IPs. Neither is a new host address for `ext0`.
 
+<details>
+<summary>Completed-test reference: script behavior and command</summary>
+
 ### What the link-test script does
 
 The [Hermes wrapper](../scripts/test-provider-link.sh) runs the same [Python helper](../scripts/test-provider-link.py) on **node1 → node2 → node3** through SSH. It uses the recorded USB MACs from Step 8; interface names are discovered from those MACs.
@@ -604,6 +638,8 @@ bash scripts/test-provider-link.sh joe --node all --apply
 
 `--node all` selects all three sequentially. `--apply` permits the temporary test; without it, the script validates and prints a plan without writes. For a later targeted retry, `--node node2` selects just node2.
 
+</details>
+
 ### Read the result before continuing
 
 | Output | Meaning |
@@ -624,9 +660,9 @@ bash scripts/test-provider-link.sh joe --node all --apply
 
 The helper attempts restoration after measurement errors and handled interruptions. Power loss or an uncatchable kill cannot guarantee restoration. A failed SSH session is not a successful test. The script refuses to write if the USB MAC/interface index changes.
 
-**Current validation:** local mocked guard/restoration/transport tests pass; this new script has not run on the physical nodes. Review its combined report before persistent configuration.
+**Current validation:** local mocked guard/restoration/transport tests pass, and the supplied real-node report confirms LINK_OK/restoration on all three nodes. The physical link step is complete; no repeat run is needed for this checkpoint.
 
-**Two address facts still needed:** is `.100` a DHCP exclusion or a MAC-bound reservation (which device, with any active lease)? Are any statically configured devices already using `.150–.199`? These answers do not block the independent physical link test; they do block committing the final cloud address allocation.
+**Two address facts still needed:** is `.100` a DHCP exclusion or a MAC-bound reservation (which device, with any active lease)? Are any statically configured devices already using `.150–.199`? The physical link test is complete; these answers are needed before committing the final cloud address allocation.
 
 <details>
 <summary>Primary references for the network choices</summary>

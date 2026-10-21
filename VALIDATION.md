@@ -1,6 +1,6 @@
 # Validation and deployment status
 
-This repository contains implementation code and learning guides. The user has completed the three Ubuntu reinstalls, basic discovery, and privileged storage collection. OpenStack deployment remains untested. Generated examples are not claimed as observed deployment results.
+This repository contains implementation code and learning guides. The user has completed the three Ubuntu reinstalls, basic discovery, privileged storage collection and exact old-Ceph removal on all three nodes. OpenStack deployment remains untested. Generated examples are not claimed as observed deployment results.
 
 ## Checked locally
 
@@ -18,13 +18,13 @@ This repository contains implementation code and learning guides. The user has c
 - Checked explicit node1/node2/node3/all selection, invalid target rejection, and the explanatory message for SMART command exit 4 with simulated commands.
 - Checked the new reset-ceph SSH wrapper with eight isolated simulated runs: target selection, remote Python quoting/compilation, preserved terminal input, apply/plan arguments, private reports, invalid inputs and stop-on-first-failure behavior. No SSH connection or disk command executed in these checks.
 
-The live evidence below comes from the user's earlier all-node run. The new node selector, wider table and explanatory message have local simulated checks; they have not yet been run on the real lab.
+The health evidence below comes from the user's earlier check-storage.sh all-node run. That collector's newer node selector, wider table and explanatory message have local simulated checks. The separate reset-ceph.sh cleanup has since completed on the real lab, as recorded below.
 
 GitHub Actions independently runs source checks and native Terraform provider validation without lab credentials. Read its actual run result; the presence of a workflow file is not a passing result.
 
 ## Requires the real lab
 
-The following are intentionally not claimed as tested: exact disk cleanup, resolution of health/diagnostic findings, new SMART self-tests, NIC driver/link behavior, Netplan application, Kolla container startup, MariaDB/RabbitMQ quorum, volume attachment, PostgreSQL data migration, application HTTP behavior, monitoring scrapes, alert firing, and controller failover.
+The following are intentionally not claimed as tested: Cinder VG provisioning, resolution of health/diagnostic findings, new SMART self-tests, NIC driver/link behavior, Netplan application, Kolla container startup, MariaDB/RabbitMQ quorum, volume attachment, PostgreSQL data migration, application HTTP behavior, monitoring scrapes, alert firing, and controller failover.
 
 The Cinder LVM multi-controller caveat in Kolla's documentation remains a validation gate. This implementation uses one backend host and aligned service-group membership; that design choice does not replace a live cross-compute read/write/reattach test.
 
@@ -44,12 +44,12 @@ All six drives report overall PASSED in this snapshot. Node1's SATA Runtime_Bad_
 
 1. Use the visual Stage 0 lesson to understand the existing report; its collection is complete.
 2. Resolve health/diagnostic questions and verify USB provider links, DNS operation, the unused API VIP, and the floating-IP range's DHCP/device exclusions.
-3. Stage 0 Step 7 now documents the exact reset-ceph helper for all three recorded SATA SSDs. The user has confirmed old Ceph contents are disposable. The first user run stopped on node1 at the old model/capacity comparison before any removal; node2/node3 were not attempted. The corrected retry passed all node1 identity/ownership/use checks, then cancelled because the entered phrase was only ERASE. No removal occurred and node2/node3 were skipped. Live guards and per-node command/serial confirmation still run before each removal. Keep later disk reuse conditional on its health review.
+3. The latest combined cleanup report records CLEANED for all three SATA disks, no detected signatures/PV/children and unchanged Ubuntu backing. Cleanup is complete. Health/diagnostic review and later Cinder VG provisioning remain separate.
 4. Fill private/lab.yml and use the staged commands in README.md. Hermes remains intact.
 
-The storage-target helper provisions only an unowned blank disk and refuses old Ceph/LVM/filesystem signatures. The separate reset-ceph helper removes only the three recorded old Ceph allocations, defaults to plan-only, requires exact host/disk/ownership/current-use checks and per-node approval for apply, and refuses new Cinder ownership. This implementation has local guard/transport validation; the supplied live attempt stopped before cleanup, and successful cleanup/post-check results have not yet been supplied.
+The storage-target helper provisions only an unowned blank disk and refuses old Ceph/LVM/filesystem signatures. The separate reset-ceph helper removes only the three recorded old Ceph allocations, defaults to plan-only, requires exact host/disk/ownership/current-use checks and per-node approval for apply, and refuses new Cinder ownership. This implementation has local guard/transport validation; the latest live run completed removal and passed post-checks on all three recorded SATA disks. This does not claim that the Cinder VG was provisioned or the hardware-health findings resolved.
 
-Two NICs per node are part of the documented design: built-in management interfaces retain the original node IPs; actual USB MACs are known for the proposed ext0 provider interfaces. Provider link/cabling/VLAN operation remains unverified. The README execution map separates observed results, the immediate cleanup run and later steps requiring additional inputs.
+Two NICs per node are part of the documented design: built-in management interfaces retain the original node IPs; actual USB MACs are known for the proposed ext0 provider interfaces. Provider link/cabling/VLAN operation remains unverified. The README execution map records the completed cleanup, current network inspection and later steps requiring additional inputs.
 
 ## First cleanup attempt: reviewed failure
 
@@ -68,3 +68,15 @@ The Stage 0 lesson now explains sequential all-node selection, stop-on-cancellat
 The latest user report again passed node1 checks, then the old one-attempt prompt received only ERASE and cancelled. No removal occurred; node2/node3 were skipped. The report does not show a complete phrase being received.
 
 The prompt now prints the required full line separately, allows three attempts, and supports explicit cancel or an empty response. EOF has an explanatory stop. Exact node/serial approval and the post-confirmation device recheck remain required. The wrapper announces the selected order and current node number. All 55 local tests passed, including six pseudo-terminal tests of the actual wrapper/helper with mocked SSH and disks. This does not claim real SSH-server behavior or successful real cleanup.
+
+## Completed live cleanup
+
+The user's 2026-10-21 combined report records node1/node2/node3 COMPLETED and RESULT CLEANED. Each exact target passed the identity/ownership/use checks, received its full host/serial approval, and completed signature/LV/VG/PV removal. Each post-check found no detected SATA signatures/PV/children and unchanged Ubuntu backing on NVMe. Lock messages ended OK and the affected commands succeeded; no identity for the other lock holder was established.
+
+No Cinder VG or new filesystem was created by the cleanup. Node1/node2 SATA stay unallocated in the design; node3 is the proposed later Cinder host. Earlier failed/cancelled attempts above are historical and are superseded by this successful run.
+
+## Next lesson: passive network inspection
+
+The new check-network wrapper collects Hermes route selections and all three nodes' actual NIC MACs, administrative state, carrier/speed/duplex, driver, addresses, routes, configured DNS and a bounded Ubuntu hostname lookup. It uses joe SSH without sudo and has no interface-enabling, address-setting, Netplan or package-install action. It saves private reports and continues after observation/connection failures.
+
+Seven isolated simulated checks passed for target selection, quoted remote Bash syntax, private report modes, continuation after review/SSH errors and invalid options. Shell/source/link checks passed. The network script has not yet run on the lab; actual link states, switch/VLAN connectivity and name-resolution outcomes remain pending.

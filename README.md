@@ -2,11 +2,11 @@
 
 Three controllers on Ubuntu 24.04, Cinder LVM, Ansible, Terraform, an application, and monitoring.
 
-**Current step: Stage 0 — remove the recorded old Ceph allocations.** Ubuntu reinstall, SSH and storage collection are already complete. OpenStack has not been deployed in this rebuild.
+**Current step: Stage 0 — inspect the two NIC paths.** Ubuntu reinstall, SSH, storage collection and old Ceph removal are complete. OpenStack has not been deployed in this rebuild.
 
-[Read the cleanup lesson before running it](docs/00-hermes-codex-and-node-reset.md#7-remove-the-recorded-old-ceph-allocations). Joe has confirmed that the old Ceph contents can be discarded. The script checks current use, shows the exact commands and asks for each node/serial confirmation.
+**Latest result:** node1, node2 and node3 each report `CLEANED`: no detected SATA signatures/PV/children, with Ubuntu backing unchanged. [Read the reviewed cleanup result](docs/00-hermes-codex-and-node-reset.md#cleanup-completed-on-all-three-nodes).
 
-**Latest run:** node1 passed its checks, but the old prompt received only `ERASE` and cancelled before removal. Nothing was erased; node2/node3 were skipped. The updated prompt shows the complete phrase on its own line and allows three attempts in the same session. The wrapper displays `Node 1/3`, then advances after success. [Read the prompt example before retrying](docs/00-hermes-codex-and-node-reset.md#updated-confirmation-prompt).
+**Run next:** [the read-only network lesson](docs/00-hermes-codex-and-node-reset.md#8-inspect-the-two-nic-paths) explains one all-node script for current NIC identities, administrative state, carrier/speed, routes and name resolution. It makes no node configuration changes.
 
 ## Two NICs per node
 
@@ -41,8 +41,8 @@ Follow this table **from top to bottom**, reviewing the result at each stop. Com
 | Order / chapter | What we run | Why we need it | Finish check |
 |---|---|---|---|
 | 1 · Stage 0 — **done** | Ubuntu install, discovery and `check-storage.sh` | Establish actual host, disk and NIC identities | Three reports reviewed; IPs preserved |
-| 2 · Stage 0 — **retry with full confirmation** | `bash scripts/reset-ceph.sh joe --node all --apply` | Old Ceph still owns the SATA SSDs after the OS reinstall | `CLEANED` or `ALREADY_BLANK` for all three |
-| 3 · Stage 0 — next review | Two-NIC link/switch review; remaining disk-health findings; DNS and address reservations | Prevent a disconnected provider uplink or duplicate IP from becoming an OpenStack failure | Link evidence and confirmed network inputs |
+| 2 · Stage 0 — **done** | `reset-ceph.sh` removed the recorded allocations | Release SATA disks retained by the old deployment | All three report CLEANED; Ubuntu backing unchanged |
+| 3 · Stage 0 — **run now** | `bash scripts/check-network.sh joe --node all`; then review links/switch, remaining health findings and address reservations | Establish the two NIC paths and prevent conflicting network inputs | Combined network report; switch/VLAN and reserved address review |
 | 4 · Stage 1 | `bash scripts/bootstrap-hermes.sh`, activate its environment, then `python scripts/labctl.py doctor` | Install the isolated deployment tools on Hermes | Required tools found; Terraform needed by Stage 3 |
 | 5 · Stages 1 + 2 | Review `private/lab.yml`; prepare Hermes SSH-key access; `labctl configure --hosts-only`, `preflight`, `base` | Give Ansible verified values and a repeatable Ubuntu baseline | Correct three-node inventory, SSH and time service |
 | 6 · Stages 1 + 2 | `labctl netplan`, then the console procedure in Stage 2, one node at a time | Bind each USB MAC to `ext0` and retain the original management address | SSH, DNS, default route and provider link checked |
@@ -102,7 +102,7 @@ For `first`, `app` or `monitor`, run `python scripts/labctl.py terraform NAME AC
 | Hermes public-key access to `joe` on all nodes | Password-only discovery does not establish unattended Ansible SSH |
 | Non-overlapping tenant CIDRs, HCP organization/workspaces and scoped cloud credentials | These depend on your network and accounts |
 
-**For this run, stop after row 2 and review `build/ceph-reset-report.txt`.** Later rows are ordered, but are not claimed ready until their inputs/checks pass. Hermes and the Ubuntu NVMe disks are outside the cleanup targets.
+**For this run, follow row 3 and share `build/network-check-report.txt`.** Later rows are ordered, but are not claimed ready until their inputs/checks pass. Hermes and the Ubuntu NVMe disks are outside the cleanup targets.
 
 <details>
 <summary>Reference: first checkout and initial discovery</summary>

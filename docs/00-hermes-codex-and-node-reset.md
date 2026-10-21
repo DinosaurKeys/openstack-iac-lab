@@ -1,6 +1,6 @@
 # Stage 0 — Understand and verify the three nodes
 
-**Current lesson:** read the [updated confirmation prompt](#updated-confirmation-prompt), then pull the update and retry Stage 0 Step 7. The old prompt repeatedly cancelled on the partial response `ERASE`; no removal has been reported. The storage report below is already collected and reviewed. The [execution map](../README.md#execution-map-what-runs-when-and-why) shows every remaining stage, including the two-NIC layout.
+**Current lesson:** [inspect the two NIC paths](#8-inspect-the-two-nic-paths). The [three-node Ceph cleanup completed successfully](#cleanup-completed-on-all-three-nodes). The [execution map](../README.md#execution-map-what-runs-when-and-why) shows the remaining stages.
 
 | Step | Status |
 |---|---|
@@ -8,10 +8,13 @@
 | Log in as `joe` and run discovery | Completed |
 | Collect storage information from all three nodes | Completed; results explained below |
 | Resolve diagnostic warnings and review disk reuse | Pending |
-| Clean the recorded SATA Ceph allocations | node1 checks passed on retry; incomplete confirmation cancelled removal; node2/node3 not attempted |
-| Verify two NIC paths / deploy OpenStack | Pending |
+| Clean the recorded SATA Ceph allocations | Completed on all three nodes; each post-check reports CLEANED |
+| Inspect two NIC paths | Current step: read-only network report |
+| Configure networking / deploy OpenStack | Pending |
 
 ## Storage inspection: one script for all three nodes
+
+**Historical snapshot:** these inspection tables describe the disks before cleanup. Step 7 records the completed removal.
 
 Your pasted file is a **diagnostic transcript**. It is long because the script printed installation progress and full health reports for six drives. The collection already ran; start with the diagram below and read one lesson at a time.
 
@@ -192,19 +195,43 @@ Your earlier disk table clipped labels such as `LVM2_m` because of the SSH termi
 
 ### 6. Stop point for this lesson
 
+This was the pre-cleanup checkpoint. Cleanup has since completed in Step 7.
+
 | We now understand | Still pending before deployment |
 |---|---|
 | NVMe holds Ubuntu; SATA retains old Ceph | Exact cleanup targets and current device-use review |
 | Root LV allocation differs from VG free space | Node1's bad-block finding and NVMe log-query warnings |
 | `REVIEW` requires reading the reason | USB provider-link checks and reviewed network inputs |
 
-**Inspection checkpoint:** the layout and findings above are recorded. Joe has now confirmed that old Ceph contents can be discarded; continue with the exact removal lesson below. There is no need to repeat the full health collection for that permission.
+**Inspection checkpoint:** these findings informed the approved cleanup recorded below. Its completed result is in Step 7; the current network lesson is Step 8.
 
 ## 7. Remove the recorded old Ceph allocations
 
-**Current chapter: Stage 0. Run from Hermes.** The reinstall put Ubuntu on NVMe but left Ceph's PV → VG → LV on each separate SATA SSD. Joe has confirmed the old Ceph contents can be discarded.
+**Completed in Stage 0, from Hermes.** The reinstall put Ubuntu on NVMe but had left Ceph's PV → VG → LV on each separate SATA SSD. Joe confirmed those contents could be discarded; the removal and post-check have now succeeded on all three nodes.
 
 **Goal for this step:** leave the three SATA SSDs available for a fresh allocation. Later, Stage 1 creates `cinder-volumes` on **node3 only**. Node1/node2 SATA SSDs remain unallocated; they are not additional Cinder replicas.
+
+### Cleanup completed on all three nodes
+
+The supplied 2026-10-21 combined report confirms:
+
+| Node | Result | SATA after the post-check | Ubuntu backing disk |
+|---|---|---|---|
+| node1 — `.200` | `CLEANED` | No detected signatures, PV or children | NVMe; unchanged |
+| node2 — `.201` | `CLEANED` | No detected signatures, PV or children | NVMe; unchanged |
+| node3 — `.202` | `CLEANED` | No detected signatures, PV or children | NVMe; unchanged |
+
+| Output you saw | Meaning |
+|---|---|
+| `22 bytes were erased ... ceph_bluestore` | Removed BlueStore's identifying signature; this is metadata cleanup, not an overwrite of every data sector |
+| LV / VG successfully removed | Removed the old Ceph logical volume and its storage pool |
+| PV labels successfully wiped | Removed the SATA disk's LVM physical-volume label |
+| `device already locked, waiting ... OK` | The operation waited for its lock, then continued successfully; the log does not identify the other lock holder |
+| `CLEANED ... Ubuntu backing unchanged` | The helper re-read the storage state and passed its final checks |
+
+**Current layout:** Ubuntu remains backed by NVMe. Each SATA SSD is available for a new allocation. No Cinder VG or replacement filesystem was created in this step. Later, node3 alone will receive `cinder-volumes`; node1/node2 SATA remain unallocated in this design.
+
+The remaining disk-health/diagnostic findings are separate from removal success. Continue with [Step 8: network observation](#8-inspect-the-two-nic-paths).
 
 ### Understand the exact targets
 
@@ -252,6 +279,9 @@ There is no `--force` override, no wildcard device target and no automatic servi
 
 </details>
 
+<details>
+<summary>Completed-step reference: earlier stops, confirmation and cleanup command</summary>
+
 ### Observed stop: model and capacity check
 
 **Your first cleanup attempt stopped on node1 before erasure.** The run reached SSH and sudo, then failed the model/capacity guard. It never reached the removal commands or the `ERASE ...` confirmation. Node2/node3 were not attempted.
@@ -275,7 +305,7 @@ The old code required those two fields to be identical. That makes the recorded 
 
 **Correction:** compare `lsblk` with its recorded Linux model. Keep the full SMART name as descriptive information. Preserve the exact serial, byte-capacity, stable-path, PV/VG/LV and current-use checks. No prefix matching or force override was added.
 
-The corrected helper prints expected and observed model, serial and byte capacity **before** validation. Model and capacity now have separate mismatch messages. That first failed run did not show its observed byte capacity. The later retry below confirmed node1 at 240,057,409,536 bytes; node2/node3 have not yet been reached by cleanup.
+The corrected helper prints expected and observed model, serial and byte capacity **before** validation. Model and capacity now have separate mismatch messages. That first failed run did not show its observed byte capacity. The later retry below confirmed node1 at 240,057,409,536 bytes; node2/node3 had not yet been reached at that point. The completed run is recorded above.
 
 **Next:** pull the corrected script and run the consolidated command below. Read each current target and command list before its per-node confirmation. A passing local test does not mean the cleanup has already succeeded on your nodes.
 
@@ -301,7 +331,7 @@ The corrected helper prints expected and observed model, serial and byte capacit
 
 These phrases are responses inside the running script. Enter one when its node asks. After a successful node1 cleanup/post-check, the script connects to node2, then node3 after node2 succeeds.
 
-**Current outcome:** nothing was erased. Node1's checks passed; cleanup and all node2/node3 checks remain pending. A successful run ends with `CLEANED` or `ALREADY_BLANK` for each node, recorded in the combined report.
+**Outcome of that cancelled attempt:** nothing was erased. Node1's checks passed; cleanup and all node2/node3 checks remain pending. A successful run ends with `CLEANED` or `ALREADY_BLANK` for each node, recorded in the combined report.
 
 ### Updated confirmation prompt
 
@@ -327,7 +357,7 @@ Paste `ERASE node1 50026B7766070422` after `Response`, then press Enter. Include
 
 The wrapper announces `Run order: node1 node2 node3` and `Node 1/3`, `Node 2/3`, `Node 3/3` as it reaches each node. Node/disk identities, exact command approval and all current-use protections remain in place.
 
-**Local verification:** terminal-driven tests ran the actual wrapper and Python confirmation input with simulated SSH and disk operations. Full phrases reached all three nodes; an `ERASE` response could be corrected in the same session. Cancellation, input ending and exhausted retries ran no disk commands. This is local validation; successful cleanup on the actual nodes is still pending.
+**Local verification:** terminal-driven tests ran the actual wrapper and Python confirmation input with simulated SSH and disk operations. Full phrases reached all three nodes; an `ERASE` response could be corrected in the same session. Cancellation, input ending and exhausted retries ran no disk commands. These were local checks before the later successful live cleanup recorded above.
 
 ### Run one consolidated command
 
@@ -370,6 +400,8 @@ Reports stay private and Git-ignored. **Stop here and review this combined repor
 
 **Health is a separate question:** cleanup does not resolve node1's SATA bad-block finding or the NVMe log-query errors. Node1's SATA is not the selected Cinder backend. Review node3's reuse evidence before the later Cinder creation step; do not turn a successful cleanup into a hardware-health certificate.
 
+</details>
+
 ### Two NICs are part of this rebuild
 
 | Interface role | Confirmed observation | Next check |
@@ -392,6 +424,77 @@ The USB interfaces were administratively DOWN in the initial discovery. Detectio
 - [LVM pvremove](https://man7.org/linux/man-pages/man8/pvremove.8.html)
 - [util-linux wipefs: signatures, locking and erase scope](https://man7.org/linux/man-pages/man8/wipefs.8.html)
 - [Ceph volume removal concepts](https://docs.ceph.com/en/latest/ceph-volume/lvm/zap/)
+
+## 8. Inspect the two NIC paths
+
+**Current chapter: Stage 0. Run from Hermes.** Ceph cleanup is complete. Next we need current network observations before rendering or applying network configuration.
+
+**Cause and effect:** working SSH proves the management path reaches the node. VM floating-IP traffic will also need the USB provider path. A detected USB adapter does not establish a working cable, link speed or switch/VLAN connection.
+
+| Path | Current identity | Intended use |
+|---|---|---|
+| Management | `enp0s31f6`; preserve `.200`, `.201`, `.202` | SSH, APIs and internal cloud traffic |
+| Provider | Each recorded USB MAC; planned name `ext0` | External/provider traffic for VMs; no host IP in the planned configuration |
+
+The [architecture diagram](../README.md#two-nics-per-node) shows these two paths. Think of them as the host-management uplink and a separate external VM uplink.
+
+### What the inspection script does
+
+The [network script](../scripts/check-network.sh) visits all three nodes through SSH as `joe`. This observation requires **no sudo** and installs no packages.
+
+| Observation | Why we collect it |
+|---|---|
+| Hermes route to each node | Record the selected local interface/source address for SSH |
+| NIC name, actual MAC and driver | Match the physical adapters to their intended roles |
+| Administrative state and carrier | Distinguish an interface being disabled from a physical link reading |
+| Speed and duplex, when readable | See the negotiated Ethernet link parameters |
+| Interface addresses and routes | Check the preserved management addresses and current gateway |
+| Configured DNS and an Ubuntu hostname query | Observe name-resolution settings and whether a query succeeds |
+
+It writes private reports on Hermes. It does not enable/rename interfaces, set addresses/routes, edit Netplan, install packages or configure OpenStack.
+
+### Learn these link states
+
+| Field | Meaning |
+|---|---|
+| `Admin: UP` | Linux has enabled the interface |
+| `Admin: DOWN` | Linux has disabled it; this inspection cannot establish the cable's working link |
+| `carrier: 1` | The kernel reports carrier; switch/VLAN configuration still needs review |
+| `carrier: 0` with Admin UP | Physical carrier is not reported; inspect cable, adapter and switch port |
+| `speed_Mbps`, `duplex` | Negotiated link readings when available; `unavailable` needs interpretation with the admin state |
+
+```mermaid
+flowchart TD
+    N["NIC identified by recorded MAC"] --> A{"Admin UP?"}
+    A -->|"No"| U["Link unverified: review enabling the NIC"]
+    A -->|"Yes"| C{"Carrier 1?"}
+    C -->|"No"| F["Check cable, adapter and switch port"]
+    C -->|"Yes"| V["Read speed and duplex; verify switch and VLAN"]
+```
+
+The USB NICs were DOWN in the original discovery. If that is still true, the script records it and leaves them in that state. We will review a targeted link-enabling step after reading the result; an inactive NIC is not enough evidence of a faulty adapter.
+
+### Run one command for the three nodes
+
+From `~/git/openstack-iac-lab` on Hermes, update with `git pull --ff-only`, then:
+
+```bash
+bash scripts/check-network.sh joe --node all
+```
+
+Enter the node SSH passwords when asked. The script prints `Node 1/3`, `Node 2/3`, `Node 3/3`. Because this is inspection, it continues to later nodes after a review flag or connection error and preserves the partial evidence.
+
+| Report | Contents |
+|---|---|
+| `build/network-check-report.txt` | Latest combined report, including Hermes route observations |
+| `build/network-check-<timestamp>-<suffix>/report.txt` | Historical combined report |
+| Same directory, `node1.txt`, `node2.txt`, `node3.txt` | Individual attempted-node output |
+
+`COLLECTED` means the observation returned without a flagged command/state. `REVIEW` means read the reason: it can be an inactive NIC, unreadable link information, a failed lookup or a connection problem. Collection alone does not prove the provider network is ready.
+
+**Stop and share the combined report.** Also describe where each USB cable goes: same LAN/switch as management, another VLAN, or currently unplugged. The script cannot infer switch-port configuration or router DHCP exclusions. A client route lookup also does not discover NAT translations.
+
+Next, use that evidence to review provider links, the unused/reserved API VIP `.100`, DNS and a floating-IP range excluded from router DHCP. Host preparation and Cinder creation follow those input checks.
 
 ## Earlier setup — reference only
 

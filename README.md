@@ -10,10 +10,17 @@ A three-controller OpenStack learning lab on Ubuntu 24.04, using Kolla-Ansible, 
 cd ~/git
 git clone https://github.com/DinosaurKeys/openstack-iac-lab.git
 cd openstack-iac-lab
-bash scripts/discover.sh
 ```
 
-If the clone already exists, use `git pull --ff-only` inside it instead. Discovery is read-only: it records the existing IP/NIC/disk layout before reinstalling. Keep build/discovery-* reports private and share only the portions needed for review. It never opens a browser, reads email, installs packages on nodes, or wipes storage.
+If the clone already exists, use `git pull --ff-only` inside it instead. Confirm the actual Ubuntu login username and the node's SSH fingerprint as [Stage 0](docs/00-hermes-codex-and-node-reset.md) explains. For node1, where the reinstalled account has been confirmed as `joe`, run:
+
+```bash
+bash scripts/discover.sh joe 192.168.0.200
+```
+
+Enter node1's `joe` password when SSH prompts; typing shows no characters. No SSH key setup or `chmod` is required when invoking the script with `bash`. Only after confirming that `joe` also exists on node2/node3 and checking their host fingerprints, use `bash scripts/discover.sh joe` to collect all three. If usernames differ, collect each IP separately with its actual account. The wrapper equivalent is `python scripts/labctl.py discover --ssh-user joe 192.168.0.200`.
+
+Discovery is read-only: it records the IP/NIC/disk layout before a reinstall or verifies the fresh installations afterward. It never reinstalls a node. Reports appear under build/discovery-*; keep them private and share only the portions needed for review. It never opens a browser, reads email, installs packages on nodes, or wipes storage. Privileged disk details are skipped if passwordless sudo is unavailable; do not change sudo policy just to run discovery. The later Ansible inventory's `ansible_user` must also match the actual node account; discovery does not change it.
 
 Copy config/lab.yml.example to private/lab.yml and fill verified provider MACs, DNS, data-disk identity/health, and a floating-IP range excluded from router DHCP and all existing LAN devices. Proposed workload CIDRs also need overlap review. HCP organization/local execution is an explicit setup choice; no external state is uploaded merely by cloning this repository.
 

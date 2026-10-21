@@ -41,6 +41,9 @@ def main():
     sub = parser.add_subparsers(dest='command', required=True)
     for name in ['doctor', 'discover', 'configure', 'preflight', 'base', 'netplan', 'init-config', 'storage', 'init-cloud']:
         entry = sub.add_parser(name)
+        if name == 'discover':
+            entry.add_argument('--ssh-user', required=True, help='Actual Ubuntu login account on the selected nodes')
+            entry.add_argument('nodes', nargs='*', help='Optional lab node IPs; default is all three nodes')
         if name == 'configure':
             entry.add_argument('--hosts-only', action='store_true')
     kolla = sub.add_parser('kolla')
@@ -60,7 +63,7 @@ def main():
                 missing.append(name)
         raise SystemExit(bool(missing))
     if args.command == 'discover':
-        run(['bash', ROOT / 'scripts/discover.sh'])
+        run(['bash', ROOT / 'scripts/discover.sh', args.ssh_user, *args.nodes])
         return
     require_workloads = args.command in ['terraform', 'application', 'monitoring'] or (args.command == 'configure' and not args.hosts_only)
     cfg = config(args.config, include_workloads=require_workloads)

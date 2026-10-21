@@ -30,21 +30,23 @@ flowchart TD
 
 ## 1. Inspect first — on Hermes
 
-After pulling this repository, the supplied read-only collector is the simplest entry point:
+After pulling this repository, verify SSH access with the account actually created during Ubuntu installation. The script takes that username as its first argument and optional node IPs afterward. Node1's reinstalled account is confirmed as `joe`; on Hermes run:
 
 ```bash
-bash scripts/discover.sh
+bash scripts/discover.sh joe 192.168.0.200
 ```
 
-It writes private reports under build/discovery-*. The commands below are the underlying inspection pattern if you want to understand or repeat it manually.
+SSH may ask for node1's `joe` password. No characters appear while typing. The script permits password login as well as existing SSH keys; it does not require `ssh-copy-id`, passwordless sudo, or executable permission when run through `bash`. Keep SSH host-key checking enabled. If the key changed after reinstalling, follow section 3 before trying again.
 
-Record the current OS/NIC/disk information before reinstalling. These commands only inspect the nodes; sudo may prompt.
+It writes private reports under build/discovery-*. With no IP arguments it visits all three nodes, using the specified account. Only after confirming that account on each node and checking the new host fingerprints, collect all three:
 
 ```bash
-for ip in 192.168.0.200 192.168.0.201 192.168.0.202; do
-  ssh openstack@"$ip" 'hostnamectl; ip -br address; ip route; lsblk -e7 -o NAME,PATH,SIZE,TYPE,FSTYPE,MOUNTPOINTS,MODEL,SERIAL; ls -l /dev/disk/by-id/'
-done
+bash scripts/discover.sh joe
 ```
+
+If usernames differ, run the collector separately for each IP with its actual username. You can also use `python scripts/labctl.py discover --ssh-user joe 192.168.0.200`. Discovery skips privileged disk details if passwordless sudo is unavailable; ordinary hardware/network reports are still collected. A failed connection prints the account/IP and exits unsuccessfully; any report for that failed node may be incomplete.
+
+Record the current OS/NIC/disk information before reinstalling when possible. If the reinstalls are already complete, collect the fresh layout now; do not reinstall again merely to run discovery. The script only inspects the nodes.
 
 Make a private record with one row per disk: host, model, serial, stable by-id path, size, current partitions/mounts, intended OS/data use. The old README reports prior disk-health findings; a new use as Cinder storage does not make an unhealthy disk safe.
 
@@ -55,7 +57,7 @@ Before reuse, run read-only SMART reporting for each **identified** physical dat
 1. Download Ubuntu Server 24.04 LTS from [Ubuntu](https://ubuntu.com/download/server) and verify the published image checksum.
 2. Boot the USB installer. Choose the intended node's **OS disk by model/serial**. Recreate its OS layout. Check that the installer is not selecting the separate data disk.
 3. Set the hostname and static management address from the table below. The recorded gateway was 192.168.0.1; verify the router address. Use verified DNS servers from the existing network.
-4. Create user `openstack`, enable OpenSSH, and retain normal sudo access. Do not copy a shared SSH host key or machine-id between nodes.
+4. Create a normal user, enable OpenSSH, and retain normal sudo access. Record the exact username. The Ansible examples currently default to `openstack`, but an existing `joe` account can be used by matching the inventory's `ansible_user` to it before Ansible runs. Do not reinstall or create another account just to run discovery. Do not copy a shared SSH host key or machine-id between nodes.
 5. Reboot, remove the installer, and inspect disk/mount/network state again.
 
 | Hostname | Management IP |
@@ -70,22 +72,24 @@ Separate data disks can retain Ceph signatures after the OS reinstall. Their era
 
 ## 3. Verify the new SSH identities
 
-On each node's console:
+On each node's console, confirm the login username and show its host fingerprint:
 
 ```bash
+whoami
 sudo ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub
 ```
 
-On Hermes, inspect the existing known-host entry for that IP. Once the new fingerprint has been compared with the console, remove the obsolete entry and reconnect. Example for node1:
+On Hermes, inspect the existing known-host entry for that IP. Once the new fingerprint has been compared with the console, remove the obsolete entry and reconnect. Example for node1, whose account is `joe`:
 
 ```bash
-ssh-keygen -F 192.168.0.200
-ssh-keygen -R 192.168.0.200
-ssh openstack@192.168.0.200
-ssh-copy-id openstack@192.168.0.200
+ssh-keygen -f /home/joe/.ssh/known_hosts -F 192.168.0.200
+ssh-keygen -f /home/joe/.ssh/known_hosts -R 192.168.0.200
+ssh joe@192.168.0.200
 ```
 
-Repeat for .201/.202. `ssh-copy-id` installs Hermes's public key; it does not recreate the old host identity. Remove/check hostname aliases too if SSH reports an old key under `node1` rather than its IP. Do not disable host-key checking to suppress the warning.
+At SSH's trust prompt, compare the fingerprint with the console output before accepting it. Use the actual node account's installation password. `Permission denied` is a login failure; removing a remembered host identity does not fix a wrong username or password.
+
+Repeat for .201/.202, checking each node's own username and fingerprint; do not reuse node1's fingerprint for another host. Remove/check hostname aliases too if SSH reports an old key under `node1` rather than its IP. Do not disable host-key checking to suppress the warning. Later, `ssh-copy-id` can install Hermes's public key for unattended Ansible access; it is not required for this initial discovery and does not recreate the old host identity.
 
 ## 4. Install Codex on Hermes — run these yourself
 

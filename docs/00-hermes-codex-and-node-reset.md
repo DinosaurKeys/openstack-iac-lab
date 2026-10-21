@@ -1,6 +1,6 @@
 # Stage 0 — Understand and verify the three nodes
 
-**Current lesson:** [inspect the two NIC paths](#8-inspect-the-two-nic-paths). The [three-node Ceph cleanup completed successfully](#cleanup-completed-on-all-three-nodes). The [execution map](../README.md#execution-map-what-runs-when-and-why) shows the remaining stages.
+**Current lesson:** [read the network results](#observed-network-results). Collection reached all three nodes: management links and the DNS lookup worked; USB provider NICs are administratively DOWN. Ceph cleanup is complete. Confirm the USB cabling/switch/VLAN before the next link test.
 
 | Step | Status |
 |---|---|
@@ -9,7 +9,7 @@
 | Collect storage information from all three nodes | Completed; results explained below |
 | Resolve diagnostic warnings and review disk reuse | Pending |
 | Clean the recorded SATA Ceph allocations | Completed on all three nodes; each post-check reports CLEANED |
-| Inspect two NIC paths | Current step: read-only network report |
+| Inspect two NIC paths | Report reviewed on all three; management UP, USB DOWN, DNS query succeeded |
 | Configure networking / deploy OpenStack | Pending |
 
 ## Storage inspection: one script for all three nodes
@@ -427,7 +427,48 @@ The USB interfaces were administratively DOWN in the initial discovery. Detectio
 
 ## 8. Inspect the two NIC paths
 
-**Current chapter: Stage 0. Run from Hermes.** Ceph cleanup is complete. Next we need current network observations before rendering or applying network configuration.
+**Current chapter: Stage 0.** Ceph cleanup and passive network collection are complete. Read the actual results below before planning provider-link activation or persistent configuration.
+
+### Observed network results
+
+Your supplied 2026-10-21 network report reached all three nodes and changed no interface configuration.
+
+| Node | Management address | Built-in link | USB provider NIC |
+|---|---|---|---|
+| node1 | `192.168.0.200/24` | UP; carrier 1; 1000 Mb/s; full duplex | `enx00e04c557e58`: Admin DOWN; no host IP |
+| node2 | `192.168.0.201/24` | UP; carrier 1; 1000 Mb/s; full duplex | `enx00e04c2c1678`: Admin DOWN; no host IP |
+| node3 | `192.168.0.202/24` | UP; carrier 1; 1000 Mb/s; full duplex | `enx00e04c304688`: Admin DOWN; no host IP |
+
+Both recorded NIC MACs match on every node. Built-in NICs use `e1000e`; USB NICs use `r8152`. All three nodes use gateway/DNS `192.168.0.1`, and each successfully resolved `archive.ubuntu.com` using DNS data from the network.
+
+**Why REVIEW?** The script explicitly flagged each USB interface as administratively DOWN. Linux has not enabled those interfaces for traffic. Cable carrier and current usable link speed remain unverified; DOWN alone does not establish a faulty cable or adapter. [Linux distinguishes administrative and operational state](https://docs.kernel.org/networking/operstates.html).
+
+**Why does ethtool also print 1000 Mb/s on the USB NICs?** The same output says `Link detected: no`, while sysfs carrier/speed is unavailable and the interface is DOWN. That speed field alone does not establish an active gigabit link. Read the link again after a reviewed activation; we have not established why the driver reports that particular value while inactive.
+
+**What is `netlink error: Operation not permitted`?** An ethtool query was denied under the unprivileged account. Basic management link data was still returned. The report does not identify the denied subrequest. Some [ethtool get requests require privileges](https://docs.kernel.org/networking/ethtool-netlink.html); this warning is separate from the USB admin-DOWN state and gives no new evidence of hardware failure.
+
+### Hermes reaches the lab through another subnet
+
+| Observation | Meaning |
+|---|---|
+| Hermes source `192.168.162.130`, interface `ens33` | Local source/interface selected for the connections |
+| Next hop `192.168.162.2` | Gateway used to reach each node |
+| Destination `192.168.0.200–202` | Node management addresses on the lab LAN |
+
+The route and successful SSH collection establish reachability through that gateway. This report alone does not establish whether the VMware network is using NAT or a particular routed configuration.
+
+<details>
+<summary>Why are there many IPv4 and IPv6 addresses in the DNS output?</summary>
+
+They are addresses returned for `archive.ubuntu.com`, not extra addresses assigned to your nodes. The query succeeded; it did not test package downloads or IPv6 data connectivity.
+
+</details>
+
+### Current checkpoint before the next change
+
+Collection and interpretation are complete. The next useful step is a guarded USB link activation/measurement after confirming where the USB cables go. That would enable the identified provider NIC and allow a fresh carrier/speed reading; persistent naming/configuration comes later through Netplan. No activation or Netplan change has been run by this lesson.
+
+**Missing fact:** do the three USB NICs connect to the same untagged LAN as management, to a different VLAN, or are they unplugged? The report cannot identify switch-port configuration. Confirm this topology before choosing the next command. The API VIP reservation and router-DHCP-excluded floating-IP range still need review too.
 
 **Cause and effect:** working SSH proves the management path reaches the node. VM floating-IP traffic will also need the USB provider path. A detected USB adapter does not establish a working cable, link speed or switch/VLAN connection.
 
@@ -472,7 +513,10 @@ flowchart TD
     C -->|"Yes"| V["Read speed and duplex; verify switch and VLAN"]
 ```
 
-The USB NICs were DOWN in the original discovery. If that is still true, the script records it and leaves them in that state. We will review a targeted link-enabling step after reading the result; an inactive NIC is not enough evidence of a faulty adapter.
+The USB NICs were DOWN in both the original discovery and this network report. The inspection left them in that state. We will review a targeted link-enabling step after reading the result; an inactive NIC is not enough evidence of a faulty adapter.
+
+<details>
+<summary>Reference: completed network collection and report locations</summary>
 
 ### Run one command for the three nodes
 
@@ -492,9 +536,11 @@ Enter the node SSH passwords when asked. The script prints `Node 1/3`, `Node 2/3
 
 `COLLECTED` means the observation returned without a flagged command/state. `REVIEW` means read the reason: it can be an inactive NIC, unreadable link information, a failed lookup or a connection problem. Collection alone does not prove the provider network is ready.
 
-**Stop and share the combined report.** Also describe where each USB cable goes: same LAN/switch as management, another VLAN, or currently unplugged. The script cannot infer switch-port configuration or router DHCP exclusions. A client route lookup also does not discover NAT translations.
+**The combined report has been reviewed above.** The missing input is where each USB cable goes: same LAN/switch as management, another VLAN, or currently unplugged. The script cannot infer switch-port configuration or router DHCP exclusions. A client route lookup also does not discover NAT translations.
 
 Next, use that evidence to review provider links, the unused/reserved API VIP `.100`, DNS and a floating-IP range excluded from router DHCP. Host preparation and Cinder creation follow those input checks.
+
+</details>
 
 ## Earlier setup — reference only
 

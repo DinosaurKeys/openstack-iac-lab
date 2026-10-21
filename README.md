@@ -2,15 +2,15 @@
 
 Three controllers on Ubuntu 24.04, Cinder LVM, Ansible, Terraform, an application, and monitoring.
 
-**Current step: Stage 0 — inspect the two NIC paths.** Ubuntu reinstall, SSH, storage collection and old Ceph removal are complete. OpenStack has not been deployed in this rebuild.
+**Current step: Stage 0 — interpret network results and confirm provider cabling.** Ubuntu reinstall, SSH, storage collection, old Ceph removal and passive network inspection are complete. OpenStack has not been deployed in this rebuild.
 
-**Latest result:** node1, node2 and node3 each report `CLEANED`: no detected SATA signatures/PV/children, with Ubuntu backing unchanged. [Read the reviewed cleanup result](docs/00-hermes-codex-and-node-reset.md#cleanup-completed-on-all-three-nodes).
+**Latest result:** all three built-in NICs are UP at 1 Gb/s full duplex; original management IPs are preserved; the Ubuntu DNS lookup succeeded on every node. All three USB NICs are detected but administratively DOWN, so their usable provider links remain unverified. [Read the observed results and permission-warning explanation](docs/00-hermes-codex-and-node-reset.md#observed-network-results).
 
-**Run next:** [the read-only network lesson](docs/00-hermes-codex-and-node-reset.md#8-inspect-the-two-nic-paths) explains one all-node script for current NIC identities, administrative state, carrier/speed, routes and name resolution. It makes no node configuration changes.
+**Next input:** confirm whether the USB cables connect to the same untagged LAN as management, a different VLAN, or are unplugged. Use that topology to prepare the next link test. The completed inspection needs no repeat to understand these findings. [Ceph cleanup results remain recorded here](docs/00-hermes-codex-and-node-reset.md#cleanup-completed-on-all-three-nodes).
 
 ## Two NICs per node
 
-Both NICs were detected in the supplied discovery. **Provider cable/link operation is still unverified.**
+Both NICs were detected again in the network report. **Management is UP; USB provider interfaces are administratively DOWN.** Provider cable/link operation and switch/VLAN placement still need verification.
 
 | Node | Built-in NIC: management | USB NIC now | Intended name after Netplan |
 |---|---|---|---|
@@ -42,7 +42,7 @@ Follow this table **from top to bottom**, reviewing the result at each stop. Com
 |---|---|---|---|
 | 1 · Stage 0 — **done** | Ubuntu install, discovery and `check-storage.sh` | Establish actual host, disk and NIC identities | Three reports reviewed; IPs preserved |
 | 2 · Stage 0 — **done** | `reset-ceph.sh` removed the recorded allocations | Release SATA disks retained by the old deployment | All three report CLEANED; Ubuntu backing unchanged |
-| 3 · Stage 0 — **run now** | `bash scripts/check-network.sh joe --node all`; then review links/switch, remaining health findings and address reservations | Establish the two NIC paths and prevent conflicting network inputs | Combined network report; switch/VLAN and reserved address review |
+| 3 · Stage 0 — **report reviewed; link test pending** | Network inventory collected; confirm USB cabling/VLAN before provider activation | Establish the usable provider path and prevent conflicting network inputs | Management/DNS observations recorded; USB carrier and reserved addresses pending |
 | 4 · Stage 1 | `bash scripts/bootstrap-hermes.sh`, activate its environment, then `python scripts/labctl.py doctor` | Install the isolated deployment tools on Hermes | Required tools found; Terraform needed by Stage 3 |
 | 5 · Stages 1 + 2 | Review `private/lab.yml`; prepare Hermes SSH-key access; `labctl configure --hosts-only`, `preflight`, `base` | Give Ansible verified values and a repeatable Ubuntu baseline | Correct three-node inventory, SSH and time service |
 | 6 · Stages 1 + 2 | `labctl netplan`, then the console procedure in Stage 2, one node at a time | Bind each USB MAC to `ext0` and retain the original management address | SSH, DNS, default route and provider link checked |
@@ -102,7 +102,7 @@ For `first`, `app` or `monitor`, run `python scripts/labctl.py terraform NAME AC
 | Hermes public-key access to `joe` on all nodes | Password-only discovery does not establish unattended Ansible SSH |
 | Non-overlapping tenant CIDRs, HCP organization/workspaces and scoped cloud credentials | These depend on your network and accounts |
 
-**For this run, follow row 3 and share `build/network-check-report.txt`.** Later rows are ordered, but are not claimed ready until their inputs/checks pass. Hermes and the Ubuntu NVMe disks are outside the cleanup targets.
+**Current checkpoint: row 3. The network report is reviewed; confirm USB cabling before the next link test.** Later rows are ordered, but are not claimed ready until their inputs/checks pass. Hermes and the Ubuntu NVMe disks are outside the cleanup targets.
 
 <details>
 <summary>Reference: first checkout and initial discovery</summary>

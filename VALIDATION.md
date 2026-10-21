@@ -1,6 +1,6 @@
 # Validation and deployment status
 
-This repository contains implementation code and learning guides. The user has completed the three Ubuntu reinstalls, basic discovery, privileged storage collection and exact old-Ceph removal on all three nodes. OpenStack deployment remains untested. Generated examples are not claimed as observed deployment results.
+This repository contains implementation code and learning guides. The user has completed the three Ubuntu reinstalls, basic discovery, privileged storage collection, exact old-Ceph removal on all three nodes, and passive network inspection. OpenStack deployment remains untested. Generated examples are not claimed as observed deployment results.
 
 ## Checked locally
 
@@ -49,7 +49,7 @@ All six drives report overall PASSED in this snapshot. Node1's SATA Runtime_Bad_
 
 The storage-target helper provisions only an unowned blank disk and refuses old Ceph/LVM/filesystem signatures. The separate reset-ceph helper removes only the three recorded old Ceph allocations, defaults to plan-only, requires exact host/disk/ownership/current-use checks and per-node approval for apply, and refuses new Cinder ownership. This implementation has local guard/transport validation; the latest live run completed removal and passed post-checks on all three recorded SATA disks. This does not claim that the Cinder VG was provisioned or the hardware-health findings resolved.
 
-Two NICs per node are part of the documented design: built-in management interfaces retain the original node IPs; actual USB MACs are known for the proposed ext0 provider interfaces. Provider link/cabling/VLAN operation remains unverified. The README execution map records the completed cleanup, current network inspection and later steps requiring additional inputs.
+Two NICs per node are part of the documented design: built-in management interfaces retain the original node IPs; actual USB MACs are known for the proposed ext0 provider interfaces. The new report confirms management links at 1 Gb/s full duplex, but provider interfaces remain administratively DOWN and their cable/carrier/VLAN operation is unverified. The README execution map records the completed cleanup, current network inspection and later steps requiring additional inputs.
 
 ## First cleanup attempt: reviewed failure
 
@@ -79,4 +79,12 @@ No Cinder VG or new filesystem was created by the cleanup. Node1/node2 SATA stay
 
 The new check-network wrapper collects Hermes route selections and all three nodes' actual NIC MACs, administrative state, carrier/speed/duplex, driver, addresses, routes, configured DNS and a bounded Ubuntu hostname lookup. It uses joe SSH without sudo and has no interface-enabling, address-setting, Netplan or package-install action. It saves private reports and continues after observation/connection failures.
 
-Seven isolated simulated checks passed for target selection, quoted remote Bash syntax, private report modes, continuation after review/SSH errors and invalid options. Shell/source/link checks passed. The network script has not yet run on the lab; actual link states, switch/VLAN connectivity and name-resolution outcomes remain pending.
+Seven isolated simulated checks passed for target selection, quoted remote Bash syntax, private report modes, continuation after review/SSH errors and invalid options. Shell/source/link checks passed. The network script has now run on the lab, as recorded below. USB active-link testing and switch/VLAN connectivity remain pending.
+
+## Observed network results
+
+The user's 2026-10-21 report reached all three nodes. Recorded management and USB MACs matched. Each built-in e1000e NIC is admin/operational UP with carrier 1, 1000 Mb/s full duplex and the preserved .200/.201/.202 address. Each r8152 USB NIC is administratively/operationally DOWN with no host address; sysfs carrier/speed is unavailable. Each node has gateway/DNS 192.168.0.1 and successfully resolved archive.ubuntu.com from network DNS data. No node interface/address/route/Netplan changes occurred.
+
+The report also contains ethtool netlink permission denials. The collector ran unprivileged; some get requests require privileges, but this report does not identify the denied subrequest. USB ethtool output shows Speed 1000Mb/s alongside Link detected no and admin DOWN. A usable gigabit provider link has not been established. The existing collector explicitly marks the DOWN provider state REVIEW.
+
+Hermes routes to the three nodes using ens33, local source 192.168.162.130 and next hop 192.168.162.2. NAT versus another routing arrangement has not been inferred from that route alone. Router DHCP exclusions, VIP reservation, USB cable/switch/VLAN placement and active provider-link verification remain open. The original uploaded report is unchanged and is not published to the repository.

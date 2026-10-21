@@ -9,10 +9,11 @@ This repository contains implementation code and learning guides. The user has c
 - Checked all Ansible playbooks with ansible-playbook --syntax-check.
 - Exercised input guards for preserved node addresses, duplicate provider MACs, reserved floating addresses, and overlapping workload networks.
 - Exercised storage guards for wrong serials, mounted OS descendants, existing Ceph signatures, and partitioned/nonblank disks.
-- Ran 11 guard tests, including a guest-volume serial/UUID association check.
+- Ran 39 guard tests: the original 11 input/storage/guest-volume checks plus 28 exact-Ceph-removal guard and execution-flow tests. The added tests use fixtures and mocked subprocesses; they never operate on real disks.
 - Checked shell syntax and generated inventory membership.
 - Checked the consolidated storage collector with simulated SSH and diagnostic commands, including all-node collection, report privacy, optional tool installation, and continuation after connection/SMART flags. This is a local check, not real disk-health validation.
 - Checked explicit node1/node2/node3/all selection, invalid target rejection, and the explanatory message for SMART command exit 4 with simulated commands.
+- Checked the new reset-ceph SSH wrapper with eight isolated simulated runs: target selection, remote Python quoting/compilation, preserved terminal input, apply/plan arguments, private reports, invalid inputs and stop-on-first-failure behavior. No SSH connection or disk command executed in these checks.
 
 The live evidence below comes from the user's earlier all-node run. The new node selector, wider table and explanatory message have local simulated checks; they have not yet been run on the real lab.
 
@@ -40,7 +41,9 @@ All six drives report overall PASSED in this snapshot. Node1's SATA Runtime_Bad_
 
 1. Use the visual Stage 0 lesson to understand the existing report; its collection is complete.
 2. Resolve health/diagnostic questions and verify USB provider links, DNS operation, the unused API VIP, and the floating-IP range's DHCP/device exclusions.
-3. Prepare any exact disk cleanup from the reviewed identities and a current device-use check; keep reuse conditional on the health review.
+3. Stage 0 Step 7 now documents the exact reset-ceph helper for all three recorded SATA SSDs. The user has confirmed old Ceph contents are disposable. Execution is pending; its live guards and per-node command/serial confirmation still run before each removal. Keep later disk reuse conditional on its health review.
 4. Fill private/lab.yml and use the staged commands in README.md. Hermes remains intact.
 
-The storage helper provisions only an unowned blank disk. It refuses old Ceph/LVM/filesystem signatures. Exact erasure of existing storage must be prepared from the observed disk identities; the code does not guess a device or silently wipe every node.
+The storage-target helper provisions only an unowned blank disk and refuses old Ceph/LVM/filesystem signatures. The separate reset-ceph helper removes only the three recorded old Ceph allocations, defaults to plan-only, requires exact host/disk/ownership/current-use checks and per-node approval for apply, and refuses new Cinder ownership. This implementation has local guard/transport validation; actual cleanup and post-check results have not yet been supplied.
+
+Two NICs per node are part of the documented design: built-in management interfaces retain the original node IPs; actual USB MACs are known for the proposed ext0 provider interfaces. Provider link/cabling/VLAN operation remains unverified. The README execution map separates observed results, the immediate cleanup run and later steps requiring additional inputs.

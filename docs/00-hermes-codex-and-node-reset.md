@@ -1,6 +1,6 @@
 # Stage 0 — Understand and verify the three nodes
 
-**Today's lesson:** read the storage inspection you already ran.
+**Current lesson:** remove the recorded old Ceph allocations in [Step 7](#7-remove-the-recorded-old-ceph-allocations). The storage report below is already collected and reviewed. The [execution map](../README.md#execution-map-what-runs-when-and-why) shows every remaining stage, including the two-NIC layout.
 
 | Step | Status |
 |---|---|
@@ -8,7 +8,8 @@
 | Log in as `joe` and run discovery | Completed |
 | Collect storage information from all three nodes | Completed; results explained below |
 | Resolve diagnostic warnings and review disk reuse | Pending |
-| Clean old Ceph / deploy OpenStack | Pending |
+| Clean the recorded SATA Ceph allocations | Script and lesson ready; user execution pending |
+| Verify two NIC paths / deploy OpenStack | Pending |
 
 ## Storage inspection: one script for all three nodes
 
@@ -197,7 +198,122 @@ Your earlier disk table clipped labels such as `LVM2_m` because of the SSH termi
 | Root LV allocation differs from VG free space | Node1's bad-block finding and NVMe log-query warnings |
 | `REVIEW` requires reading the reason | USB provider-link checks and reviewed network inputs |
 
-**Current checkpoint:** understand this layout and the three-node findings. The next lesson will build on this record; there is no need to repeat the completed collection to understand it.
+**Inspection checkpoint:** the layout and findings above are recorded. Joe has now confirmed that old Ceph contents can be discarded; continue with the exact removal lesson below. There is no need to repeat the full health collection for that permission.
+
+## 7. Remove the recorded old Ceph allocations
+
+**Current chapter: Stage 0. Run from Hermes.** The reinstall put Ubuntu on NVMe but left Ceph's PV → VG → LV on each separate SATA SSD. Joe has confirmed the old Ceph contents can be discarded.
+
+**Goal for this step:** leave the three SATA SSDs available for a fresh allocation. Later, Stage 1 creates `cinder-volumes` on **node3 only**. Node1/node2 SATA SSDs remain unallocated; they are not additional Cinder replicas.
+
+### Understand the exact targets
+
+Each disk reported **240,057,409,536 bytes**, approximately **223.6 GiB**. These identities come from your supplied report.
+
+| Node / SSH address | SATA model | Serial that the script must match |
+|---|---|---|
+| node1 / `192.168.0.200` | KINGSTON SUV400S37240G | `50026B7766070422` |
+| node2 / `192.168.0.201` | ADATA SU630 | `4P3521354988` |
+| node3 / `192.168.0.202` | KINGSTON SA400S37240G | `50026B768317883A` |
+
+The [Python helper](../scripts/reset-ceph.py) records each full `/dev/disk/by-id/ata-...` path, PV UUID, Ceph VG and Ceph LV. It resolves that stable path on the actual node. `/dev/sda` is not used as a guessed erase target.
+
+### What runs and why
+
+The [Hermes wrapper](../scripts/reset-ceph.sh) visits node1 → node2 → node3. It uses the same helper on each, with that node's recorded identity. SSH host-key checks remain enabled.
+
+| Script step | What happens | Why |
+|---|---|---|
+| Identify | Match hostname, management IP, stable disk path, serial, model and byte capacity | Avoid selecting another host/disk |
+| Check Ubuntu | Trace the current `/` device back to its physical disk | Reject any target backing Ubuntu |
+| Check ownership/use | Require the exact recorded single-PV/single-LV Ceph layout; inspect mounts/swap, holders, raw open-device handles and LV open count | An unmounted BlueStore disk can still be in use |
+| Show the plan | Print the host, disk tree, ownership and exact removal commands | Make the operation readable before it happens |
+| Confirm | Ask for `ERASE nodeN SERIAL`, then repeat the checks | Approve this exact target and reject changed state |
+| Remove | Clear the Ceph LV signature, remove its LV, VG and PV label, then clear remaining visible whole-disk signatures | Release the old allocation for fresh use |
+| Verify/report | Re-read the disk and Ubuntu backing devices | Require no detected SATA signatures/PV/children and unchanged Ubuntu backing |
+
+The script removes allocation metadata and detected signatures. It does not overwrite every data sector. It creates no replacement filesystem, Cinder VG or OpenStack service.
+
+<details>
+<summary>The five removal commands and their effects</summary>
+
+These are an explanation of the commands the helper prints with **actual recorded paths**. Run the wrapper below, rather than editing these into direct disk commands.
+
+| Command | Effect |
+|---|---|
+| `wipefs --all --lock=yes EXACT_LV_PATH` | Remove detected BlueStore signatures inside that verified unused LV |
+| `lvremove --yes EXACT_VG/EXACT_LV` | Remove the one Ceph logical volume |
+| `vgremove --yes EXACT_VG` | Remove its now-empty Ceph volume group |
+| `pvremove --yes EXACT_BY_ID_PATH` | Remove the SATA disk's LVM physical-volume label |
+| `wipefs --all --lock=yes EXACT_BY_ID_PATH` | Clear remaining signatures detected on that whole SATA disk |
+
+There is no `--force` override, no wildcard device target and no automatic service stop. A changed layout, mounted/open target or new `cinder-volumes` owner causes a refusal. A partially completed removal also needs review before resuming.
+
+</details>
+
+### Run one consolidated command
+
+First update the checkout with `git pull --ff-only` inside `~/git/openstack-iac-lab` on Hermes. Then:
+
+```bash
+bash scripts/reset-ceph.sh joe --node all --apply
+```
+
+**During the run:** enter each node's normal SSH password and sudo password when requested. Read its target/commands. At the target confirmation, type the exact `ERASE ...` line shown by the script. It then works on that disk and moves to the next node.
+
+| Input | Meaning |
+|---|---|
+| `joe` | Confirmed login account on the nodes |
+| `--node all` | Process exactly node1, node2 and node3, sequentially |
+| `--apply` | Allow the printed removal after the per-node confirmation |
+| Omit `--apply` | Inspect and print plans; perform no removal |
+| Use `--node node3`, for example | Select only that recorded node; same implementation |
+
+### Read the result before the next step
+
+**Expected messages below are acceptance examples, not results already observed in your lab.**
+
+| Result | Meaning / action |
+|---|---|
+| `RESULT nodeN: CLEANED` | Removal and post-check succeeded on this node |
+| `RESULT nodeN: ALREADY_BLANK` | This recorded SATA disk already has no detected signatures/PV/children; no change needed |
+| `RESULT nodeN: PLAN_ONLY` | Inspection only; removal was not requested |
+| `STOP: ...` | A check/command failed or confirmation was cancelled; inspect the reason |
+
+If one node stops, the wrapper does **not** attempt the later nodes. Changes already completed on earlier nodes remain. Do not rerun with a force flag; there is none.
+
+| Report on Hermes | Purpose |
+|---|---|
+| `build/ceph-reset-report.txt` | Combined output for this run |
+| `build/ceph-reset-<timestamp>-<suffix>/report.txt` | Preserved historical combined report |
+| Same directory, `node1.txt` / `node2.txt` / `node3.txt` | Output for each attempted node |
+
+Reports stay private and Git-ignored. **Stop here and review this combined report.** The next lesson checks the two NIC paths and remaining inputs in the [execution map](../README.md#execution-map-what-runs-when-and-why).
+
+**Health is a separate question:** cleanup does not resolve node1's SATA bad-block finding or the NVMe log-query errors. Node1's SATA is not the selected Cinder backend. Review node3's reuse evidence before the later Cinder creation step; do not turn a successful cleanup into a hardware-health certificate.
+
+### Two NICs are part of this rebuild
+
+| Interface role | Confirmed observation | Next check |
+|---|---|---|
+| Built-in `enp0s31f6` | Working management SSH at `.200`, `.201`, `.202` | Preserve address/routing/DNS through host preparation |
+| USB provider NIC | Detected on each node; MACs below | Verify cable, switch/VLAN, link speed and stability before Netplan/OVS |
+
+| Node | USB interface observed | MAC used for the planned `ext0` match |
+|---|---|---|
+| node1 | `enx00e04c557e58` | `00:e0:4c:55:7e:58` |
+| node2 | `enx00e04c2c1678` | `00:e0:4c:2c:16:78` |
+| node3 | `enx00e04c304688` | `00:e0:4c:30:46:88` |
+
+The USB interfaces were administratively DOWN in the initial discovery. Detection establishes identity; it does not establish cable carrier or throughput. The [README diagram](../README.md#two-nics-per-node) shows the intended management and provider paths. Netplan later matches these MACs and names each provider interface `ext0`, with no host IP.
+
+### References for this operation
+
+- [LVM lvremove: unopened LV removal](https://man7.org/linux/man-pages/man8/lvremove.8.html)
+- [LVM vgremove](https://man7.org/linux/man-pages/man8/vgremove.8.html)
+- [LVM pvremove](https://man7.org/linux/man-pages/man8/pvremove.8.html)
+- [util-linux wipefs: signatures, locking and erase scope](https://man7.org/linux/man-pages/man8/wipefs.8.html)
+- [Ceph volume removal concepts](https://docs.ceph.com/en/latest/ceph-volume/lvm/zap/)
 
 ## Earlier setup — reference only
 
@@ -226,7 +342,7 @@ For a future reinstall, record disk identities and export any required data befo
 
 The old cluster becomes unavailable during this full rebuild. Reinstalling only node1 leaves node2/node3's old deployment state in place, so it does not achieve the requested three-node clean start.
 
-Separate data disks can retain Ceph signatures after the OS reinstall. Their erase/provisioning commands must be written after the actual serials and device relationships are reviewed. This repository intentionally has no generic wipe-all-disks script.
+Separate data disks can retain Ceph signatures after the OS reinstall. Their erase/provisioning commands depend on actual serials and device relationships. Step 7 now provides the reviewed, target-specific Ceph cleanup for this rebuild. It is not a generic wipe-all-disks procedure.
 
 ## 3. Verify the new SSH identities
 

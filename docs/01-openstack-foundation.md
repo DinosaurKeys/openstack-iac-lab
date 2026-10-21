@@ -90,9 +90,9 @@ Kolla's guide still flags multi-controller LVM issues. One volume host does not 
 
 ## 4. Prepare exactly one Cinder data disk
 
-This step is blocked until Stage 0's live disk identification and health review is complete. The dedicated disk must not contain the OS, an OS LVM physical volume, a mounted filesystem, swap, or data to retain. Old Ceph ownership must be cleared using an exact reviewed procedure first.
+This step is blocked until Stage 0's live disk identification and health review is complete. The dedicated disk must not contain the OS, an OS LVM physical volume, a mounted filesystem, swap, or data to retain. Old Ceph ownership must first be cleared through [Stage 0 Step 7](00-hermes-codex-and-node-reset.md#7-remove-the-recorded-old-ceph-allocations), then its actual result reviewed.
 
-On the selected storage node, create the `cinder-volumes` volume group on the approved dedicated disk. Disk-erasing `pvcreate`/cleanup commands are intentionally not pre-filled without its verified by-id path/serial.
+On the selected storage node, create the `cinder-volumes` volume group on the approved dedicated disk. The `labctl --ask-become-pass storage` action uses `scripts/storage-target.py` to create this VG only on the configured blank disk after host/serial confirmation. It refuses existing Ceph ownership; cleanup is the separate Stage 0 action. Fill the reviewed node3 by-id path/serial in private/lab.yml first.
 
 After the approved provisioning, verify on node3:
 

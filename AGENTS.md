@@ -2,7 +2,7 @@
 
 ## Objective
 
-Build a documented three-controller OpenStack lab on Ubuntu 24.04. Teach Ansible roles, Terraform modules, app deployment, and monitoring. Use Cinder LVM, not Ceph. Preserve node1 192.168.0.200, node2 192.168.0.201, node3 192.168.0.202, and API VIP 192.168.0.100. Preserve Hermes and its existing installation.
+Build a documented three-controller OpenStack lab on Ubuntu 24.04. Teach Ansible roles, Terraform modules, app deployment, and monitoring. Use Cinder LVM, not Ceph. Preserve node1 192.168.0.200, node2 192.168.0.201, node3 192.168.0.202, and API VIP 192.168.0.100. Preserve Hermes and its existing installation. Use the confirmed two-NIC design: built-in enp0s31f6 retains management IPs; each actual USB NIC is intended for the MAC-matched ext0 provider interface without a host IP. USB link/cabling/VLAN operation is not yet verified.
 
 ## Working method
 

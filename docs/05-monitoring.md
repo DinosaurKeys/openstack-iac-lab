@@ -50,7 +50,7 @@ ansible-playbook -i ansible/inventory/hosts.yml -i build/application.inventory.j
 ansible-playbook -i ansible/inventory/hosts.yml -i build/application.inventory.json -i build/monitoring.inventory.json ansible/playbooks/monitoring.yml -e @private/monitoring.vault.yml --ask-vault-pass --ask-become-pass
 ```
 
-The merged inventory uses openstack for the physical hosts and ubuntu for the VMs. Targets include all three physical hosts, app1, db1, and monitor1. The node_exporter role is reused across them. Port 9100 must not already belong to another exporter; Kolla's monitoring services are disabled in this design to avoid duplication.
+The merged inventory uses `joe` for the physical hosts and `ubuntu` for the VMs. Targets include all three physical hosts, app1, db1, and monitor1. The node_exporter role is reused across them. Port 9100 must not already belong to another exporter; Kolla's monitoring services are disabled in this design to avoid duplication.
 
 Physical-host metrics use 192.168.0.200–.202. Verify routing/firewall access from the monitoring VM. Tenant SNAT can change the source address observed on those physical hosts; observe it before narrowing host-firewall rules. VM metrics use private workload IPs and the explicit security-group permission.
 

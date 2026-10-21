@@ -1,10 +1,32 @@
 # Stage 1 — Three controllers, two computes, one Cinder LVM host
 
-**Current checkpoint:** Hermes tools are ready. Next, [prepare SSH-key access as `joe`](#ssh-access-for-ansible). No repeat tool installation is needed.
+**Current checkpoint:** Hermes tools are ready. The SSH script created its dedicated key, then stopped while unlocking it. [Read the observed stop and the one report command](#current-ssh-stop-key-created-unlock-failed). No repeat tool installation is needed.
 
 ## SSH access for Ansible
 
 **Stage 1 — connect the deployment computer to the nodes.** Password SSH worked during discovery. Ansible needs a repeatable login method. This step installs one dedicated public key, then tests key login and remote Python on all three nodes.
+
+### Current SSH stop: key created, unlock failed
+
+Your summary started at `2026-10-21T21:09:40Z`:
+
+| Phase | Observed result | Meaning |
+|---|---|---|
+| Create dedicated key | `COMPLETED` | The key-generation command succeeded on Hermes |
+| Unlock key for four hours | `STOP` | `ssh-add` failed; its error is missing from the short summary |
+| Public-key installation, node login and Ansible `ping` | Not reached in this run | The script stopped before contacting node1; `--node all` does not skip a failed prerequisite |
+
+**Why unlock first?** The private key stays on Hermes. The script loads it into `ssh-agent` so the later key-only SSH tests can use it. Creation succeeded; loading it did not. We need the command's actual error before choosing a fix.
+
+The sentence **“Earlier public-key additions remain”** is generic script wording. It does not establish that any public key was copied in this run. The node-copy loop comes after unlocking; previous authorized keys, if any, are not removed.
+
+**Next — run this on Hermes from `~/git/openstack-iac-lab`:**
+
+```bash
+sed -n '/^--- Unlock key for four hours ---/,/^STOP:/p' build/ssh-access-report.txt
+```
+
+`sed -n` prints only the saved log section from the unlock heading through `STOP`. This command reads the existing report and changes nothing. Share that output before retrying setup. Keep the existing key; the summary alone cannot identify a passphrase, file-permission or agent problem.
 
 ### Understand the three parts
 
@@ -32,7 +54,10 @@ The [SSH script](../scripts/prepare-ssh.sh) uses the same procedure for node1 `.
 
 Ansible `ping` is not an ICMP/network ping. It runs a small Python module and may create/clean temporary module files under `joe`'s account. This step installs no node packages and changes no network, disk, sudo or SSH-server policy.
 
-### Run one block on Hermes
+<details>
+<summary>Setup command reference — review the current unlock error before retrying</summary>
+
+### Initial setup on Hermes
 
 ```bash
 cd ~/git/openstack-iac-lab
@@ -51,11 +76,13 @@ The `eval` line starts an agent and connects **this terminal** to it. Keep this 
 | `KEY_LOGIN_OK` | That node accepted a fresh key-only login and matched its expected identity/address |
 | Ansible `SUCCESS` and `"ping": "pong"` | SSH and remote Python worked |
 | `RESULT: SSH_READY for all` | All selected-node checks passed |
-| `STOP` | Read the failed phase; later nodes/steps were not attempted. Earlier public-key additions remain |
+| `STOP` | Read the failed phase; later nodes/steps were not attempted. Keys installed during earlier completed phases are not rolled back |
 
 Latest summary: **`build/ssh-access-summary.txt`**. Full log: `build/ssh-access-report.txt`. The key stays outside Git; reports and the test inventory are in ignored, private `build/` files.
 
-**Checkpoint:** share the summary before applying host configuration. The script has local fixture checks; it has not yet run on the lab. Tracked/generated host inventories now select this dedicated key; workload VM keys remain a separate later input.
+**Checkpoint:** the first supplied live run created the key but stopped during unlock, as recorded above. No `SSH_READY` result has been observed. Tracked/generated host inventories select this dedicated key; workload VM keys remain a separate later input. Review the actual unlock error before another run or host configuration.
+
+</details>
 
 <details>
 <summary>Later verification, agent lifetime and references</summary>

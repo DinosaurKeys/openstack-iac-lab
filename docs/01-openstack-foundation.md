@@ -1,12 +1,34 @@
 # Stage 1 — Three controllers, two computes, one Cinder LVM host
 
-**Current checkpoint:** Hermes tools are ready. The SSH key was created, but loading it into the agent stopped without a saved error. [Read the result and the direct Hermes-only check](#current-ssh-stop-key-created-unlock-failed). No repeat tool installation is needed.
+**Current checkpoint:** Hermes tools and the dedicated key are present. The direct key-load check reached a passphrase prompt, then exited `1`. [Read what that establishes and the one clarification needed](#current-ssh-stop-key-created-unlock-failed). No repeat installation is needed.
 
 ## SSH access for Ansible
 
 **Stage 1 — connect the deployment computer to the nodes.** Password SSH worked during discovery. Ansible needs a repeatable login method. This step installs one dedicated public key, then tests key login and remote Python on all three nodes.
 
 ### Current SSH stop: key created, unlock failed
+
+**Latest result:** your direct `ssh-add` check displayed a passphrase prompt, then `ssh-add exit=1`.
+
+| Observed | Meaning |
+|---|---|
+| `Enter passphrase for /home/joe/.ssh/openstack-iac-lab:` | OpenSSH reached the existing key's passphrase-entry step |
+| `ssh-add exit=1` | The load command failed; this code alone does not identify why |
+| No `Identity added` result or node checks | Key loading has not been verified; this direct command contacted no nodes |
+
+**Why can it stop without an error?** In the reviewed OpenSSH 9.6 code, an empty passphrase response ends the load quietly. A terminal input-read failure can also return an empty response. A wrong, non-empty passphrase normally produces a retry prompt. Your single prompt followed by exit `1` is **consistent with empty input**, but we have not established what was entered or why it was empty.
+
+**Next: clarify the prompt interaction, without another command.** Did you type the passphrase chosen when this key was created, type your Ubuntu account password, or press Enter without typing? If you do not remember the key passphrase, say so. Describe the action only; do not send the passphrase itself.
+
+| Term | What it protects |
+|---|---|
+| Key passphrase | This private-key file on Hermes; chosen during key creation |
+| Ubuntu account password | The `joe` login account; separate from the key's passphrase |
+
+Sources: [OpenSSH exit status](https://man.openbsd.org/ssh-add), [9.6 key-loading code](https://github.com/openssh/openssh-portable/blob/V_9_6_P1/ssh-add.c#L300-L327), [input handling](https://github.com/openssh/openssh-portable/blob/V_9_6_P1/readpass.c#L123-L201). These explain possible behavior, not a confirmed cause on Hermes.
+
+<details>
+<summary>Reviewed history: original script stop, empty log and direct diagnostic command</summary>
 
 Your summary started at `2026-10-21T21:09:40Z`:
 
@@ -22,7 +44,7 @@ Your summary started at `2026-10-21T21:09:40Z`:
 
 The old sentence **“Earlier public-key additions remain”** was generic wording. No node-copy phase was reached in this run. The corrected script reports whether any public-key installation was attempted.
 
-**Next — run these two lines directly in the same Hermes terminal:**
+The completed diagnostic used these two lines directly in the same Hermes terminal:
 
 ```bash
 ssh-add -v -t 4h ~/.ssh/openstack-iac-lab
@@ -42,7 +64,9 @@ printf 'ssh-add exit=%s\n' "$?"
 | `1` | The command failed; review the visible message/prompt outcome |
 | `2` | `ssh-add` could not contact the agent |
 
-Share the terminal output and exit code before another all-node run. Keep the existing key. A passphrase, permission or agent cause has not yet been established. Source: [OpenSSH ssh-add: terminal prompts, lifetime and exit status](https://man.openbsd.org/ssh-add).
+**Reviewed result:** the direct check reached the passphrase prompt and exited `1`, as recorded above. Keep the existing key; clarify what was entered before another command. Source: [OpenSSH ssh-add: terminal prompts, lifetime and exit status](https://man.openbsd.org/ssh-add).
+
+</details>
 
 ### Understand the three parts
 
@@ -97,7 +121,7 @@ The `eval` line starts an agent and connects **this terminal** to it. Keep this 
 
 Latest summary: **`build/ssh-access-summary.txt`**. Full log: `build/ssh-access-report.txt`. The key stays outside Git; reports and the test inventory are in ignored, private `build/` files.
 
-**Checkpoint:** the first supplied live run created the key but stopped during unlock, as recorded above. Its full-log extract has no diagnostic text. No `SSH_READY` result has been observed. Tracked/generated host inventories select this dedicated key; workload VM keys remain a separate later input. Review the direct check before another all-node run or host configuration. Pull the updated script before that later run; reading the log or running the direct check requires no Git update.
+**Checkpoint:** the script stopped during unlock; the later direct check reached passphrase entry and exited `1`. No `SSH_READY` result has been observed. Tracked/generated host inventories select this dedicated key; workload VM keys remain a separate later input. Clarify the prompt interaction before another all-node run or host configuration. Pull the updated script before that later run.
 
 </details>
 

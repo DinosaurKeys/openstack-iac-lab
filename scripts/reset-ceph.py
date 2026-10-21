@@ -206,6 +206,27 @@ def commands(node):
     ]
 
 
+def confirm_target(node):
+    token = f'ERASE {node} {TARGETS[node]["serial"]}'
+    print(f'\nApproval for {node} requires all three words: ERASE, node name, disk serial.', flush=True)
+    print('Copy this ENTIRE line into the response below:', flush=True)
+    print(token, flush=True)
+    for attempt in range(1, 4):
+        try:
+            response = input('Response (full line; Enter or cancel to stop): ')
+        except EOFError:
+            raise ValueError('Confirmation input ended; target was not changed') from None
+        if response == token:
+            return
+        if not response.strip() or response.strip().lower() == 'cancel':
+            raise ValueError('Cancelled; target was not changed')
+        if attempt == 3:
+            raise ValueError('Cancelled after 3 unmatched responses; target was not changed')
+        print('Response did not match; no changes made. Include ERASE, the node name and the full serial.', flush=True)
+        print(f'Required full line ({3 - attempt} attempts remaining):', flush=True)
+        print(token, flush=True)
+
+
 def reset(node, apply=False):
     state = collect(node)
     target = TARGETS[node]
@@ -235,9 +256,7 @@ def reset(node, apply=False):
     if not apply:
         print(f'RESULT {node}: PLAN_ONLY; no change', flush=True)
         return
-    token = f'ERASE {node} {target["serial"]}'
-    if input(f'Type {token} to approve these commands on this target: ') != token:
-        raise ValueError('Cancelled; target was not changed')
+    confirm_target(node)
     # Check again after the user reads the plan. Do not act on a stale snapshot.
     latest = collect(node)
     if check(node, latest) != 'ceph' or latest != state:

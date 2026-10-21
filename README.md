@@ -6,7 +6,7 @@ Three controllers on Ubuntu 24.04, Cinder LVM, Ansible, Terraform, an applicatio
 
 [Read the cleanup lesson before running it](docs/00-hermes-codex-and-node-reset.md#7-remove-the-recorded-old-ceph-allocations). Joe has confirmed that the old Ceph contents can be discarded. The script checks current use, shows the exact commands and asks for each node/serial confirmation.
 
-**Latest run:** node1 passed all target, ownership and current-use checks. Entering only `ERASE` cancelled its confirmation, so nothing was erased and node2/node3 were skipped. [Why all-node execution stops and the full phrases to enter](docs/00-hermes-codex-and-node-reset.md#why-the-run-stopped-at-node1).
+**Latest run:** node1 passed its checks, but the old prompt received only `ERASE` and cancelled before removal. Nothing was erased; node2/node3 were skipped. The updated prompt shows the complete phrase on its own line and allows three attempts in the same session. The wrapper displays `Node 1/3`, then advances after success. [Read the prompt example before retrying](docs/00-hermes-codex-and-node-reset.md#updated-confirmation-prompt).
 
 ## Two NICs per node
 

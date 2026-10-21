@@ -224,6 +224,33 @@ class CephResetTests(unittest.TestCase):
                 reset.reset('node3', apply=True)
         run.assert_not_called()
 
+    def test_partial_confirmation_can_be_corrected_before_any_mutation(self):
+        token = 'ERASE node3 ' + reset.TARGETS['node3']['serial']
+        with patch('builtins.input', side_effect=['ERASE', token]) as ask, patch.object(reset.subprocess, 'run') as run, redirect_stdout(io.StringIO()) as log:
+            reset.confirm_target('node3')
+        self.assertEqual(ask.call_count, 2)
+        run.assert_not_called()
+        self.assertIn('no changes made', log.getvalue())
+        self.assertIn(token, log.getvalue())
+
+    def test_full_wrong_node_phrase_is_not_accepted(self):
+        with patch('builtins.input', return_value='ERASE node2 4P3521354988') as ask, redirect_stdout(io.StringIO()):
+            with self.assertRaisesRegex(ValueError, '3 unmatched'):
+                reset.confirm_target('node3')
+        self.assertEqual(ask.call_count, 3)
+
+    def test_blank_or_explicit_cancel_stops_immediately(self):
+        for response in ['', 'cancel', ' CANCEL ']:
+            with self.subTest(response=response), patch('builtins.input', return_value=response) as ask, redirect_stdout(io.StringIO()):
+                with self.assertRaisesRegex(ValueError, 'Cancelled'):
+                    reset.confirm_target('node3')
+                ask.assert_called_once()
+
+    def test_eof_at_confirmation_has_an_explanation(self):
+        with patch('builtins.input', side_effect=EOFError), redirect_stdout(io.StringIO()):
+            with self.assertRaisesRegex(ValueError, 'input ended; target was not changed'):
+                reset.confirm_target('node3')
+
     def test_changed_state_after_confirmation_does_not_mutate(self):
         changed = copy.deepcopy(self.state)
         changed['tree'][0]['children'][0]['mountpoints'] = ['/new-mount']

@@ -1,6 +1,6 @@
 # Stage 0 — Understand and verify the three nodes
 
-**Current lesson:** understand [why an all-node run stopped at node1](#why-the-run-stopped-at-node1), then repeat Stage 0 Step 7 with the full confirmation phrase. The storage report below is already collected and reviewed. The [execution map](../README.md#execution-map-what-runs-when-and-why) shows every remaining stage, including the two-NIC layout.
+**Current lesson:** read the [updated confirmation prompt](#updated-confirmation-prompt), then pull the update and retry Stage 0 Step 7. The old prompt repeatedly cancelled on the partial response `ERASE`; no removal has been reported. The storage report below is already collected and reviewed. The [execution map](../README.md#execution-map-what-runs-when-and-why) shows every remaining stage, including the two-NIC layout.
 
 | Step | Status |
 |---|---|
@@ -291,7 +291,7 @@ The corrected helper prints expected and observed model, serial and byte capacit
 
 `--apply` requests removal after validation and confirmation. The full phrase identifies both the host and the disk serial being approved.
 
-**Next:** run the same wrapper command below. Your script is already current at `106c457`; this documentation update does not require a script replacement. At each matching confirmation prompt, enter its **entire phrase**:
+**Next:** pull the script update described below. At each matching confirmation prompt, enter its **entire phrase**:
 
 | Prompt on | Full phrase to enter at that prompt |
 |---|---|
@@ -303,6 +303,32 @@ These phrases are responses inside the running script. Enter one when its node a
 
 **Current outcome:** nothing was erased. Node1's checks passed; cleanup and all node2/node3 checks remain pending. A successful run ends with `CLEANED` or `ALREADY_BLANK` for each node, recorded in the combined report.
 
+### Updated confirmation prompt
+
+**Cause of the latest stop:** the old prompt received `ERASE`, while it required the three-word host/serial phrase. Its single attempt immediately cancelled the all-node run. Node1 passed its checks; no removal ran, and node2/node3 were skipped again.
+
+The helper now displays a separate line to copy and gives **three attempts** in the same SSH session. The full phrase remains required. This is an example of the new display after node1 passes its checks:
+
+```text
+Copy this ENTIRE line into the response below:
+ERASE node1 50026B7766070422
+Response (full line; Enter or cancel to stop):
+```
+
+Paste `ERASE node1 50026B7766070422` after `Response`, then press Enter. Include all three words. The script displays the matching phrase for node2 and node3 when it reaches them.
+
+| Response or event | Effect |
+|---|---|
+| Correct full phrase | Recheck current state, then run the printed removal commands |
+| An incomplete or wrong phrase | Show the required line again, up to three total attempts; no removal yet |
+| Three unmatched responses | Stop this node and the remaining run without removal on this node |
+| Empty response, `cancel`, or input ending | Cancel this node and stop the run |
+| Completed cleanup and post-check | Proceed to the next selected node |
+
+The wrapper announces `Run order: node1 node2 node3` and `Node 1/3`, `Node 2/3`, `Node 3/3` as it reaches each node. Node/disk identities, exact command approval and all current-use protections remain in place.
+
+**Local verification:** terminal-driven tests ran the actual wrapper and Python confirmation input with simulated SSH and disk operations. Full phrases reached all three nodes; an `ERASE` response could be corrected in the same session. Cancellation, input ending and exhausted retries ran no disk commands. This is local validation; successful cleanup on the actual nodes is still pending.
+
 ### Run one consolidated command
 
 First update the checkout with `git pull --ff-only` inside `~/git/openstack-iac-lab` on Hermes. Then:
@@ -311,7 +337,7 @@ First update the checkout with `git pull --ff-only` inside `~/git/openstack-iac-
 bash scripts/reset-ceph.sh joe --node all --apply
 ```
 
-**During the run:** enter each node's normal SSH password and sudo password when requested. Read its target/commands. At the target confirmation, type the exact `ERASE ...` line shown by the script. It then works on that disk and moves to the next node.
+**During the run:** enter each node's normal SSH password and sudo password when requested. Read its target/commands. At `Response`, paste the complete `ERASE nodeN SERIAL` line shown by the script and press Enter. It then works on that disk and moves to the next node.
 
 | Input | Meaning |
 |---|---|

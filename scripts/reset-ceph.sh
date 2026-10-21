@@ -33,7 +33,10 @@ mkdir -p "$repo_dir/build"
 report_dir=$(mktemp -d "$repo_dir/build/ceph-reset-$(date -u +%Y%m%dT%H%M%SZ)-XXXXXX")
 report="$report_dir/report.txt"
 printf 'Stage 0: exact Ceph reset\nNodes: %s\nApply requested: %s\nUTC: %s\n' "$selected_node" "$apply" "$(date -u +%FT%TZ)" > "$report"
+printf 'Run order: %s. One node at a time; a failed node stops the run.\n' "${nodes[*]}"
+node_number=0
 for node in "${nodes[@]}"; do
+  node_number=$((node_number + 1))
   case "$node" in
     node1) ip=192.168.0.200 ;;
     node2) ip=192.168.0.201 ;;
@@ -41,7 +44,7 @@ for node in "${nodes[@]}"; do
   esac
   remote_command="sudo -- python3 -u -c '$quoted_body' --node $node"
   if (( apply )); then remote_command+=" --apply"; fi
-  printf '\n%s: SSH and sudo may each ask for this node\047s password.\n' "$node"
+  printf '\nNode %s/%s: %s (%s). SSH and sudo may each ask for this node\047s password.\n' "$node_number" "${#nodes[@]}" "$node" "$ip"
   node_report="$report_dir/$node.txt"
   if ssh -t -o BatchMode=no -o ConnectTimeout=8 -l "$ssh_user" "$ip" "$remote_command" 2>&1 | tee "$node_report"; then
     status=COMPLETED

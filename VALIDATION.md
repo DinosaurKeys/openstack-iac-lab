@@ -9,8 +9,9 @@ This repository contains implementation code and learning guides. The user has c
 - Checked all Ansible playbooks with ansible-playbook --syntax-check.
 - Exercised input guards for preserved node addresses, duplicate provider MACs, reserved floating addresses, and overlapping workload networks.
 - Exercised storage guards for wrong serials, mounted OS descendants, existing Ceph signatures, and partitioned/nonblank disks.
-- Ran 45 guard tests: the original 11 input/storage/guest-volume checks plus 34 exact-Ceph-removal guard and execution-flow tests. The added tests use fixtures and mocked subprocesses; they never operate on real disks.
+- Ran 55 tests: 49 input/storage/confirmation checks and six terminal-driven integration cases. Disk reads/actions are fixtures or recorded mocks; no real disk operation is performed.
 - Added regression coverage for the actual Linux model strings from all three nodes, rejection of unrecorded prefixes, diagnostic values before a model stop, and exact byte-capacity mismatch messages. Model/capacity failures still reject apply before any mutation or confirmation.
+- Tested the actual wrapper and real Python input through a pseudo-terminal with simulated SSH: full phrases reach all three nodes, a partial ERASE can be corrected, and cancellation/EOF/three mismatches stop without a disk command. Plan-only mode visits all three without asking for approval.
 - Compared LV aliases by their canonical device paths: a /dev/mapper name must resolve to the same device as the recorded /dev/VG/LV path. Regression fixtures accept that same-device alias and reject an unrelated LV; ownership checks remain exact.
 - Checked shell syntax and generated inventory membership.
 - Checked the consolidated storage collector with simulated SSH and diagnostic commands, including all-node collection, report privacy, optional tool installation, and continuation after connection/SMART flags. This is a local check, not real disk-health validation.
@@ -60,4 +61,10 @@ The original helper compared SMART full model names with Linux lsblk model names
 
 The user's next 2026-10-21 report shows node1's Linux model KINGSTON SUV400S, serial 50026B7766070422 and byte capacity 240057409536 matching the recorded target. Ubuntu was traced to /dev/nvme0n1. The helper passed all target, ownership and current-use checks and displayed the removal commands. The entered confirmation was ERASE instead of the required full host/serial phrase; it cancelled before any removal command. Node2/node3 were not attempted. This verifies node1 pre-removal checks in that snapshot, not a completed cleanup or a health certification.
 
-The Stage 0 lesson now explains sequential all-node selection, stop-on-cancellation behavior and the exact per-node confirmation phrases. The script is unchanged by this documentation update.
+The Stage 0 lesson now explains sequential all-node selection, stop-on-cancellation behavior and the exact per-node confirmation phrases. That documentation update left the script unchanged. The later prompt revision is recorded below.
+
+## Repeated partial response: prompt revised
+
+The latest user report again passed node1 checks, then the old one-attempt prompt received only ERASE and cancelled. No removal occurred; node2/node3 were skipped. The report does not show a complete phrase being received.
+
+The prompt now prints the required full line separately, allows three attempts, and supports explicit cancel or an empty response. EOF has an explanatory stop. Exact node/serial approval and the post-confirmation device recheck remain required. The wrapper announces the selected order and current node number. All 55 local tests passed, including six pseudo-terminal tests of the actual wrapper/helper with mocked SSH and disks. This does not claim real SSH-server behavior or successful real cleanup.

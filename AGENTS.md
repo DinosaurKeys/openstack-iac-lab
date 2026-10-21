@@ -17,5 +17,6 @@ Build a documented three-controller OpenStack lab on Ubuntu 24.04. Teach Ansible
 9. Record actual execution results and unresolved problems. Never describe draft code as a completed deployment.
 10. Use six core guides. Add detail within the relevant guide instead of creating a chapter for every command.
 11. Start each teaching step by naming the current stage and explaining the cause shown by the actual evidence. Consolidate repeated node operations in scripts/ or Ansible roles, explain their inputs/effects/output, then give one stage command. Review its report together before moving on. Avoid repeated per-node command lists and large terminal paste blocks; learning the system is the objective.
+12. Publish each step's lesson in the relevant guide before recommending its execution, and link directly to that section in chat. Explain the concepts, cause, script behavior, changes, outputs and result interpretation. After a run, document the reviewed findings and remaining unknowns without publishing secrets or raw private reports. A script and a chat summary alone do not satisfy this requirement.
 
 These instructions express the workflow; they are not a security sandbox. Codex permissions and OS/network access must also be configured appropriately.

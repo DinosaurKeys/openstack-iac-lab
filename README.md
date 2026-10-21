@@ -22,7 +22,11 @@ Enter each node's `joe` password when SSH prompts; typing shows no characters. N
 
 Discovery is read-only: it records the IP/NIC/disk layout before a reinstall or verifies the fresh installations afterward. It never reinstalls a node. Reports appear under build/discovery-*; keep them private and share only the portions needed for review. It never opens a browser, reads email, installs packages on nodes, or wipes storage. Privileged disk details are skipped if passwordless sudo is unavailable; do not change sudo policy just to run discovery. Preparation and generated Kolla inventories now use the confirmed `ansible_user: joe`.
 
-**Current step: Stage 0 storage inspection.** The separate SATA disks retained Ceph metadata when Ubuntu was reinstalled on the NVMe disks. [Stage 0 explains the cause and each check](docs/00-hermes-codex-and-node-reset.md#storage-inspection-one-script-for-all-three-nodes). One command on Hermes collects privileged LVM, mount, stable-ID and SMART evidence from all three nodes:
+**Current step: Stage 0 storage inspection.** The separate SATA disks retained Ceph metadata when Ubuntu was reinstalled on the NVMe disks. [Stage 0 explains the cause and each check](docs/00-hermes-codex-and-node-reset.md#storage-inspection-one-script-for-all-three-nodes).
+
+Read first: [SSH connections](docs/00-hermes-codex-and-node-reset.md#1-ssh-how-one-script-reaches-all-three-nodes) · [Disk/mount/LVM ownership](docs/00-hermes-codex-and-node-reset.md#2-disks-mounts-and-lvm-what-owns-the-space) · [SMART health](docs/00-hermes-codex-and-node-reset.md#3-smart-what-the-drive-reports-about-its-health) · [The combined report](docs/00-hermes-codex-and-node-reset.md#4-reports-where-the-results-go-and-how-to-read-them).
+
+After reading the lesson, one command on Hermes collects privileged LVM, mount, stable-ID and SMART evidence from all three nodes:
 
 ```bash
 bash scripts/check-storage.sh joe --install-tools

@@ -1,6 +1,6 @@
 # Stage 0 — Understand and verify the three nodes
 
-**Current lesson:** [review the successful USB test](#observed-usb-link-results), then finish the [address plan](#address-plan-confirmed-values-and-proposals). All three USB NICs negotiated 1 Gb/s full duplex and returned to DOWN with management unchanged. Ceph cleanup is complete. Persistent networking and OpenStack deployment come later.
+**Current lesson:** [understand the Windows ping and external-address budget](#reviewed-windows-ping-and-address-budget). All three USB link tests passed. Joe confirms `.100` reserved and no static devices in `.150–.199`, explicitly offering `.150/.151/.152`. Final pool size and VIP binding remain open. [Hermes tool preparation](01-openstack-foundation.md#next-run-prepare-the-tools-on-hermes) can proceed independently.
 
 | Step | Status |
 |---|---|
@@ -576,7 +576,7 @@ The timestamped directories in `build/` are run history. `provider-link-report.t
 | Checkpoint | State |
 |---|---|
 | USB physical negotiation and restoration | Complete on all three nodes |
-| `.100` reservation/exclusion and other static users in `.150–.199` | Next facts needed for the network address plan |
+| `.100` reservation and external pool | Reservation reported and no static users in `.150–.199` confirmed; binding and pool-size choice remain open |
 | Persistent Netplan, cloud deployment and VM traffic | Later steps; not run yet |
 
 ### Address plan: confirmed values and proposals
@@ -587,8 +587,9 @@ Joe confirms both NICs connect to the **same mini switch**, on **`192.168.0.0/24
 |---|---|---|
 | `192.168.0.1` | Router and DNS | Observed in all three node reports |
 | `192.168.0.2–149` | Router DHCP pool | Confirmed by Joe |
-| `192.168.0.100` | Planned OpenStack API VIP | Joe reports a reservation; exact exclusion/binding and current lease need clarification |
-| `192.168.0.150–199` | **Proposed** OpenStack external allocation pool: 50 addresses | Outside DHCP and before the node IPs; other static use is still unknown |
+| `192.168.0.100` | Planned OpenStack API VIP | Joe reiterates it is reserved; reservation client/current lease still unspecified |
+| `192.168.0.150–152` | Three external addresses explicitly offered by Joe | Owner says free; enough for the first workload, smaller than the full coexistence budget |
+| `192.168.0.153–199` | Remaining addresses in the proposed wider pool | Joe reports no static users across `.150–.199`; final pool size remains to be chosen |
 | `192.168.0.200–202` | node1, node2, node3 management | Preserved; already in use |
 | `192.168.0.203–250` | No new allocation in this step | Outside reported DHCP; availability unknown |
 
@@ -607,6 +608,38 @@ flowchart TD
 ```
 
 The VIP is how clients reach OpenStack APIs. External allocation addresses are for Neutron router gateways and VM floating IPs. Neither is a new host address for `ext0`.
+
+### Reviewed Windows ping and address budget
+
+Joe confirms **no manually configured devices in `.150–.199`**, and explicitly offers **`.150`, `.151`, `.152`**. Record that as the network owner's allocation information. The supplied ping output is a separate connectivity observation:
+
+| Output | Precise interpretation |
+|---|---|
+| `Reply from 192.168.0.59: Destination host unreachable` | `.59` reports an error; this is not an echo reply from `.150`, `.151` or `.152` |
+| `Received = 4 ... 0% loss` | All four displayed lines are errors; that summary does not turn them into successful target replies |
+| No successful target replies | Consistent with the targets being unused, but a ping cannot prove an address has no offline/static owner |
+
+The pasted output does not establish whether `.59` is the local PC or another device, nor does it identify the DHCP server. Do not diagnose a broken Windows stack or change firewall/VLAN settings from this output. [Microsoft's troubleshooting guidance](https://learn.microsoft.com/en-us/troubleshoot/windows-server/networking/troubleshoot-tcp-ip-communication-guidance) explains unreachable errors and the limits of ping.
+
+**Why three external addresses are tight:** Neutron router gateways consume external addresses as well as VM floating IPs. The current repository templates have this budget if the first VM, app and monitoring remain deployed together:
+
+| Workload | Router gateway addresses | VM floating IPs | Total |
+|---|---:|---:|---:|
+| First workload | 1 | 1 | 2 |
+| Application, including private PostgreSQL | 1 | 1 for the Flask/Nginx VM; 0 for DB | 2 |
+| Monitoring | 0 new; reuses the app network/router | 1 | 1 |
+| **All three together** | **2** | **3** | **5** |
+
+This is a budget calculated from `terraform/01-first-workload`, `02-application`, `03-monitoring` and the shared modules; it is not an observed allocation or a promise of exact IP order. [Neutron documents external router address consumption](https://specs.openstack.org/openstack/neutron-specs/specs/newton/subnet-service-types.html). The API VIP `.100` is separate and does not consume this pool. A three-controller router HA setup does not mean one floating IP per physical node.
+
+| Choice | Effect |
+|---|---|
+| Keep only `.150–.152` | First lesson fits. Destroy its disposable workload before running app plus monitoring together, which then use three addresses; no spare capacity |
+| Use the proposed `.150–.199` | Fifty addresses, room for the five-address design and later practice; Joe reports the block unused, but confirm this wider allocation scope before generation |
+
+**VIP fact to establish:** Joe has already answered that `.100` is reserved. The useful next detail is **which DHCP product/device manages that reservation**, so its client binding and current lease can be checked precisely. Do not keep asking whether it is reserved. Do not map the VIP to an invented controller MAC or assign it on all three nodes.
+
+**What can run now?** [Stage 1's Hermes-only tool preparation](01-openstack-foundation.md#next-run-prepare-the-tools-on-hermes). Installing deployment tools on Hermes does not require assigning a VIP or creating the external pool. Final private cloud configuration and node changes wait for their outstanding checks.
 
 <details>
 <summary>Completed-test reference: script behavior and command</summary>
@@ -662,7 +695,7 @@ The helper attempts restoration after measurement errors and handled interruptio
 
 **Current validation:** local mocked guard/restoration/transport tests pass, and the supplied real-node report confirms LINK_OK/restoration on all three nodes. The physical link step is complete; no repeat run is needed for this checkpoint.
 
-**Two address facts still needed:** is `.100` a DHCP exclusion or a MAC-bound reservation (which device, with any active lease)? Are any statically configured devices already using `.150–.199`? The physical link test is complete; these answers are needed before committing the final cloud address allocation.
+**Remaining address choices:** which DHCP product/device manages `.100`, and should OpenStack receive only `.150–.152` or the wider proposed `.150–.199`? Joe's no-static-device answer is already recorded. Final cloud configuration waits for the remaining details; Hermes tool preparation can proceed now.
 
 <details>
 <summary>Primary references for the network choices</summary>

@@ -24,7 +24,49 @@ Quorum protects agreement on control state. It does not recover a lost local dis
 
 ## 1. Freeze the toolchain without changing the old project
 
-The implementation entry point is `bash scripts/bootstrap-hermes.sh`. The individual commands below explain what it installs. You need not run both methods. New-project input lives in private/lab.yml; `python scripts/labctl.py configure --hosts-only` generates build/inventory.yml, build/kolla-inventory.yml, and build/globals.yml. HCP/workload inputs can wait until Stage 3, when the full configure step generates Terraform settings too. The examples below also show manual equivalents for learning.
+### Next run: prepare the tools on Hermes
+
+**Stage 1 — prepare the deployment computer.** Node identity, old-Ceph cleanup and USB physical testing are complete. The remaining address-allocation details do not block installing tools on Hermes. This step installs software; it does not log into or configure the nodes.
+
+Think of Hermes as the management workstation. Ansible will apply host configuration, Kolla-Ansible will install OpenStack, and the OpenStack client will call its APIs. Installing those tools does not yet run those operations.
+
+| Part | What this step does | Why |
+|---|---|---|
+| Ubuntu packages on Hermes | Update package index; install Git, curl, certificates and Python build/venv dependencies | Build/install the Python deployment tools |
+| `~/venvs/kolla-iac` | Install the repository's selected Kolla commit, compatible Ansible constraint, OpenStack client and PyYAML | Give this project an isolated Python tool environment |
+| `build/collections` | Install Kolla's requirements and the project's Ansible collections | Supply the Ansible modules/roles used by later steps |
+| Version record | Save `pip freeze` in the private report directory | Record the exact Python versions that were actually installed |
+| Doctor | Print executable locations and any `MISSING` tools | Verify what Hermes can find before configuring nodes |
+
+The [preparation wrapper](../scripts/prepare-hermes.sh) calls the existing [bootstrap installer](../scripts/bootstrap-hermes.sh), records output, and runs doctor with the new environment on PATH. It requires the hostname `hermes` and an interactive terminal. Existing `~/venvs/kolla` and `/etc/kolla` are outside its targets. It does not install Codex or modify AI settings.
+
+**Run once from a terminal on Hermes**, even if your current directory is `build/`:
+
+```bash
+cd ~/git/openstack-iac-lab
+git pull --ff-only
+bash scripts/prepare-hermes.sh
+```
+
+Enter **Hermes's sudo password** when asked. Package download/installation may take several minutes. You do not need to activate a virtual environment first; the script uses the intended environment explicitly. It does not change the parent terminal's environment.
+
+| Result | Interpretation |
+|---|---|
+| `INSTALL: COMPLETED` | Package/bootstrap commands finished successfully |
+| `INSTALL: STOPPED` | Installation failed; read the first actual error before retrying |
+| Doctor paths under `~/venvs/kolla-iac/bin` for Ansible/Kolla/OpenStack | The selected project environment is being used |
+| `terraform: MISSING` | Terraform still needs installation before Stage 3; this script does not install it |
+| `RESULT: TOOLS_FOUND` | All doctor executables were found; this is not a deployment or API test |
+| `RESULT: REVIEW` | Read each missing executable or command error; do not run deployment phases yet |
+
+The latest combined report is **`build/hermes-tools-report.txt`**. Timestamped logs and `python-versions.txt` live in `build/hermes-tools-<timestamp>-<suffix>/`, with private file/directory permissions. Review the report's final doctor/result section together. No raw report belongs in public Git.
+
+**Validation status:** shell/source checks and isolated wrapper simulations are local checks. The actual package install, dependency resolution and executable paths on Hermes need the user's run. Final VIP/pool configuration, SSH keys for Ansible, disk-health review and node preparation remain later checkpoints.
+
+<details>
+<summary>Reference: individual installation commands and later configuration generation</summary>
+
+New-project input lives in private/lab.yml; `python scripts/labctl.py configure --hosts-only` generates build/inventory.yml, build/kolla-inventory.yml, and build/globals.yml. HCP/workload inputs can wait until Stage 3, when the full configure step generates Terraform settings too. The commands below explain the underlying installer and later configuration; do not run them in addition to the preparation script for this checkpoint.
 
 Run on Hermes. This guide selects OpenStack 2026.1 and the inspected Kolla stable/2026.1 commit `15ce36696a21356eb59abb4473e210f13cf7c98c`. The branch can move; the commit pin does not. Container tags and OS package repositories are separate moving inputs and must be recorded after deployment.
 
@@ -60,6 +102,8 @@ chmod 600 "$LAB_CONFIG/passwords.yml"
 ```
 
 Merge the reviewed values from `kolla/globals.yml.example` into the new globals file. Each command below passes `--configdir` explicitly. Old Ceph overrides and custom images are not inputs to this deployment.
+
+</details>
 
 ## 2. Prepare the host networking
 

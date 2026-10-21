@@ -104,3 +104,13 @@ The user's combined report started at 2026-10-21T19:17:04Z and records node1/nod
 Each USB NIC was then set DOWN, its disable_ipv6 setting restored from temporary 1 to original 0, and the helper's final checks verified unchanged management addresses/routes. This confirms basic physical negotiation at the time of the test and successful restoration on all three nodes. It does not establish sustained throughput/stability, VLAN forwarding, persistent Netplan behavior or VM connectivity. There is no reason to repeat the successful test by default.
 
 The Stage 0 lesson and README checkpoint now record completed physical testing and pending address-allocation facts: exact .100 DHCP exclusion/reservation binding and current lease, and other static users in proposed .150–.199. Scripts and configuration flags were unchanged by this documentation update. The private raw report is not published.
+
+## Address-owner confirmation and next Hermes preparation
+
+Joe reiterates that .100 is reserved and confirms no manually configured devices in .150–.199, explicitly offering .150/.151/.152. The DHCP product/device, reservation client binding and current lease are still unspecified. Final three-address versus wider-pool allocation scope remains to be chosen. No public/private config verification flag was changed.
+
+The supplied Windows ping output for .150/.151/.152 contains only Destination host unreachable messages from .59, despite Received 4/Lost 0 summaries. There are no successful target echo replies. The report does not identify .59's role or the DHCP server, and ping cannot certify absence of offline/static ownership. The owner's allocation statement is recorded separately from that observation.
+
+Inspection of the existing Terraform roots/modules gives a five-address external budget with all current workloads present: one first-workload router plus one VM floating IP; one app router plus one app floating IP; one monitoring floating IP reusing the app network/router. PostgreSQL has no floating IP. This is source-derived planning, not a live allocation. No Terraform/network topology changes were made for this update.
+
+The new prepare-hermes.sh wrapper installs through the existing bootstrap-hermes.sh, records private logs/Python versions and runs doctor in the selected environment. It requires an interactive terminal on hostname hermes, stops after installer failure and never invokes SSH/node configuration or cloud deployment. Local shell/source checks and isolated simulations cover success, installation failure, doctor review and report permissions. The actual package install/dependency resolution on Hermes remains pending.

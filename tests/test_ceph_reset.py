@@ -187,6 +187,18 @@ class CephResetTests(unittest.TestCase):
         self.state['tree'][0]['children'].append({'name': '/dev/test-sata1', 'kname': 'test-sata1', 'type': 'part', 'ro': False, 'mountpoints': [None]})
         self.rejected('Unexpected children')
 
+    def test_mapper_alias_for_same_recorded_lv_is_accepted(self):
+        alias = '/dev/mapper/test-ceph-block'
+        self.state['tree'][0]['children'][0]['name'] = alias
+        target = reset.TARGETS['node3']
+        lv_path = f'/dev/{target["vg"]}/{target["lv"]}'
+        with patch.object(reset.os.path, 'realpath', side_effect=lambda name: '/dev/dm-test' if name in {alias, lv_path} else name):
+            self.assertEqual(reset.check('node3', self.state), 'ceph')
+
+    def test_mapper_alias_for_different_lv_is_rejected(self):
+        self.state['tree'][0]['children'][0]['name'] = '/dev/mapper/unrelated-volume'
+        self.rejected('Unexpected children')
+
     def test_unknown_filesystem(self):
         self.state['tree'][0]['children'][0]['fstype'] = 'ext4'
         self.rejected('signatures')

@@ -9,8 +9,9 @@ This repository contains implementation code and learning guides. The user has c
 - Checked all Ansible playbooks with ansible-playbook --syntax-check.
 - Exercised input guards for preserved node addresses, duplicate provider MACs, reserved floating addresses, and overlapping workload networks.
 - Exercised storage guards for wrong serials, mounted OS descendants, existing Ceph signatures, and partitioned/nonblank disks.
-- Ran 43 guard tests: the original 11 input/storage/guest-volume checks plus 32 exact-Ceph-removal guard and execution-flow tests. The added tests use fixtures and mocked subprocesses; they never operate on real disks.
+- Ran 45 guard tests: the original 11 input/storage/guest-volume checks plus 34 exact-Ceph-removal guard and execution-flow tests. The added tests use fixtures and mocked subprocesses; they never operate on real disks.
 - Added regression coverage for the actual Linux model strings from all three nodes, rejection of unrecorded prefixes, diagnostic values before a model stop, and exact byte-capacity mismatch messages. Model/capacity failures still reject apply before any mutation or confirmation.
+- Compared LV aliases by their canonical device paths: a /dev/mapper name must resolve to the same device as the recorded /dev/VG/LV path. Regression fixtures accept that same-device alias and reject an unrelated LV; ownership checks remain exact.
 - Checked shell syntax and generated inventory membership.
 - Checked the consolidated storage collector with simulated SSH and diagnostic commands, including all-node collection, report privacy, optional tool installation, and continuation after connection/SMART flags. This is a local check, not real disk-health validation.
 - Checked explicit node1/node2/node3/all selection, invalid target rejection, and the explanatory message for SMART command exit 4 with simulated commands.

@@ -184,7 +184,7 @@ def check(node, state):
     attr = lv['lv_attr']
     if len(attr) < 6 or attr[0] != '-' or attr[4] != 'a' or attr[5] != '-':
         raise ValueError('Ceph LV must be a normal active, unopened LV; no force activation/removal')
-    if len(devices) != 2 or devices[1]['type'] != 'lvm' or os.path.realpath(expected_path) != devices[1]['name']:
+    if len(devices) != 2 or devices[1]['type'] != 'lvm' or os.path.realpath(expected_path) != os.path.realpath(devices[1]['name']):
         raise ValueError('Unexpected children/partitions under the Ceph disk')
     child = devices[1]
     if child.get('fstype') != 'ceph_bluestore' or disk.get('fstype') != 'LVM2_member':

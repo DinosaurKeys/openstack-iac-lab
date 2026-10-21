@@ -2,15 +2,15 @@
 
 Three controllers on Ubuntu 24.04, Cinder LVM, Ansible, Terraform, an application, and monitoring.
 
-**Current step: Stage 0 — interpret network results and confirm provider cabling.** Ubuntu reinstall, SSH, storage collection, old Ceph removal and passive network inspection are complete. OpenStack has not been deployed in this rebuild.
+**Current step: Stage 0 — test the USB links and review LAN address allocation.** Ubuntu reinstall, SSH, storage collection, old Ceph removal and passive network inspection are complete. OpenStack has not been deployed in this rebuild.
 
 **Latest result:** all three built-in NICs are UP at 1 Gb/s full duplex; original management IPs are preserved; the Ubuntu DNS lookup succeeded on every node. All three USB NICs are detected but administratively DOWN, so their usable provider links remain unverified. [Read the observed results and permission-warning explanation](docs/00-hermes-codex-and-node-reset.md#observed-network-results).
 
-**Next input:** confirm whether the USB cables connect to the same untagged LAN as management, a different VLAN, or are unplugged. Use that topology to prepare the next link test. The completed inspection needs no repeat to understand these findings. [Ceph cleanup results remain recorded here](docs/00-hermes-codex-and-node-reset.md#cleanup-completed-on-all-three-nodes).
+**Confirmed by Joe:** both NICs connect to the same mini switch on `192.168.0.0/24`; router DHCP serves `.2–.149`; `.100` has a reservation whose binding/exclusion still needs clarification. Proposed floating pool `.150–.199` avoids DHCP and node addresses but needs a check for other static users. [Read the address plan and temporary USB test](docs/00-hermes-codex-and-node-reset.md#9-test-the-usb-links-and-review-the-address-plan). [Completed Ceph cleanup](docs/00-hermes-codex-and-node-reset.md#cleanup-completed-on-all-three-nodes).
 
 ## Two NICs per node
 
-Both NICs were detected again in the network report. **Management is UP; USB provider interfaces are administratively DOWN.** Provider cable/link operation and switch/VLAN placement still need verification.
+Both NICs were detected again in the network report. **Management is UP; USB provider interfaces are administratively DOWN.** Joe confirms shared switch/LAN cabling; active USB carrier and switch/VLAN operation still need verification.
 
 | Node | Built-in NIC: management | USB NIC now | Intended name after Netplan |
 |---|---|---|---|
@@ -20,9 +20,9 @@ Both NICs were detected again in the network report. **Management is UP; USB pro
 
 ```mermaid
 flowchart TD
-    L["LAN switch: proposed flat provider LAN"] <--> M["Built-in NIC: original node IP"]
-    L <--> U["USB NIC: ext0, no host IP"]
-    H["Hermes and LAN clients"] <--> L
+    L["Mini switch: 192.168.0.0/24"] <--> M["Built-in NIC: original node IP"]
+    L <--> U["USB NIC: planned ext0, no host IP"]
+    H["Hermes via its existing gateway"] <--> L
     M <--> C["Host SSH, APIs, cluster traffic"]
     M <--> I["Internal VM tunnels and iSCSI"]
     U <--> O["OVS br-ex and Neutron router"]
@@ -32,7 +32,7 @@ flowchart TD
 
 The built-in NIC carries host management **and internal OpenStack traffic**. The USB NIC supplies the external/provider connection used for VM floating-IP traffic. This separates host and provider interfaces; it does not provide NIC failover or dedicated storage bandwidth.
 
-**Design to verify:** both NICs reach the intended untagged LAN for the proposed flat network. Switch ports, VLAN configuration, link speed and USB adapter stability need checking. If the cabling reaches a different network, review that topology before applying Netplan. The API VIP `.100` belongs on the management side through Keepalived.
+**Cabling confirmed; operation pending:** both NICs connect to that mini switch/LAN. The intended provider network is flat/untagged; link negotiation, switch-port behavior and USB adapter stability still need checking. The API VIP `.100` belongs on the management side through Keepalived. Its reported DHCP reservation is not yet verified as suitable for a movable static VIP.
 
 ## Execution map: what runs, when and why
 
@@ -42,7 +42,7 @@ Follow this table **from top to bottom**, reviewing the result at each stop. Com
 |---|---|---|---|
 | 1 · Stage 0 — **done** | Ubuntu install, discovery and `check-storage.sh` | Establish actual host, disk and NIC identities | Three reports reviewed; IPs preserved |
 | 2 · Stage 0 — **done** | `reset-ceph.sh` removed the recorded allocations | Release SATA disks retained by the old deployment | All three report CLEANED; Ubuntu backing unchanged |
-| 3 · Stage 0 — **report reviewed; link test pending** | Network inventory collected; confirm USB cabling/VLAN before provider activation | Establish the usable provider path and prevent conflicting network inputs | Management/DNS observations recorded; USB carrier and reserved addresses pending |
+| 3 · Stage 0 — **current** | `bash scripts/test-provider-link.sh joe --node all --apply` after reading Step 9 | Temporarily enable each unused USB NIC, measure its physical link, restore DOWN | Link/restoration report reviewed; VIP and floating-pool allocations checked separately |
 | 4 · Stage 1 | `bash scripts/bootstrap-hermes.sh`, activate its environment, then `python scripts/labctl.py doctor` | Install the isolated deployment tools on Hermes | Required tools found; Terraform needed by Stage 3 |
 | 5 · Stages 1 + 2 | Review `private/lab.yml`; prepare Hermes SSH-key access; `labctl configure --hosts-only`, `preflight`, `base` | Give Ansible verified values and a repeatable Ubuntu baseline | Correct three-node inventory, SSH and time service |
 | 6 · Stages 1 + 2 | `labctl netplan`, then the console procedure in Stage 2, one node at a time | Bind each USB MAC to `ext0` and retain the original management address | SSH, DNS, default route and provider link checked |
@@ -95,14 +95,14 @@ For `first`, `app` or `monitor`, run `python scripts/labctl.py terraform NAME AC
 
 | Input | Why it cannot be guessed |
 |---|---|
-| USB cabling/switch/VLAN and working links | A detected NIC does not establish a usable provider path |
-| Working DNS and unused/reserved `.100` | Existing configuration is evidence of settings, not proof of service/address availability |
-| Router DHCP exclusions, floating-IP start/end, Hermes address and other LAN allocations | Prevent assigning an IP already used by another device |
+| USB link test and switch-port/VLAN behavior | Same-switch cabling is confirmed; carrier and provider traffic still need testing |
+| Exact `.100` reservation/exclusion, bound device and active lease | The VIP sits inside the reported DHCP pool and must not be leased to another device |
+| Other static LAN allocations; proposed floating pool `.150–.199` | Outside DHCP does not mean unused; `.200–.202` already belong to the nodes |
 | Reviewed node3 disk reuse and unresolved diagnostic limitations | Deleting Ceph does not repair hardware or resolve a failed NVMe log query |
 | Hermes public-key access to `joe` on all nodes | Password-only discovery does not establish unattended Ansible SSH |
 | Non-overlapping tenant CIDRs, HCP organization/workspaces and scoped cloud credentials | These depend on your network and accounts |
 
-**Current checkpoint: row 3. The network report is reviewed; confirm USB cabling before the next link test.** Later rows are ordered, but are not claimed ready until their inputs/checks pass. Hermes and the Ubuntu NVMe disks are outside the cleanup targets.
+**Current checkpoint: row 3. Read [Stage 0 Step 9](docs/00-hermes-codex-and-node-reset.md#9-test-the-usb-links-and-review-the-address-plan), then run its one all-node test from Hermes.** Later rows need their remaining inputs/checks. Hermes and the Ubuntu NVMe disks are outside the cleanup targets.
 
 <details>
 <summary>Reference: first checkout and initial discovery</summary>

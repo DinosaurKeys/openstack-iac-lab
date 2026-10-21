@@ -1,6 +1,6 @@
 # Stage 0 — Understand and verify the three nodes
 
-**Current lesson:** [read the network results](#observed-network-results). Collection reached all three nodes: management links and the DNS lookup worked; USB provider NICs are administratively DOWN. Ceph cleanup is complete. Confirm the USB cabling/switch/VLAN before the next link test.
+**Current lesson:** [Step 9: USB link test and LAN address plan](#9-test-the-usb-links-and-review-the-address-plan). Joe confirms the two NICs connect to the same mini switch/LAN. The passive report showed working management/DNS and USB NICs administratively DOWN. Ceph cleanup is complete; the next test temporarily enables only the unused USB NICs and restores DOWN.
 
 | Step | Status |
 |---|---|
@@ -10,6 +10,8 @@
 | Resolve diagnostic warnings and review disk reuse | Pending |
 | Clean the recorded SATA Ceph allocations | Completed on all three nodes; each post-check reports CLEANED |
 | Inspect two NIC paths | Report reviewed on all three; management UP, USB DOWN, DNS query succeeded |
+| Confirm switch/LAN and DHCP scope | Joe confirms shared switch, `192.168.0.0/24`, DHCP `.2–.149`; `.100` reservation needs clarification |
+| Measure USB carrier/speed and restore DOWN | Script locally checked; real-node run pending |
 | Configure networking / deploy OpenStack | Pending |
 
 ## Storage inspection: one script for all three nodes
@@ -466,9 +468,9 @@ They are addresses returned for `archive.ubuntu.com`, not extra addresses assign
 
 ### Current checkpoint before the next change
 
-Collection and interpretation are complete. The next useful step is a guarded USB link activation/measurement after confirming where the USB cables go. That would enable the identified provider NIC and allow a fresh carrier/speed reading; persistent naming/configuration comes later through Netplan. No activation or Netplan change has been run by this lesson.
+Collection and interpretation are complete. Joe has since confirmed the NICs connect to the same mini switch on `192.168.0.0/24`. [Step 9](#9-test-the-usb-links-and-review-the-address-plan) now supplies the guarded temporary USB activation/measurement. Persistent naming/configuration comes later through Netplan; neither has run on the lab yet.
 
-**Missing fact:** do the three USB NICs connect to the same untagged LAN as management, to a different VLAN, or are they unplugged? The report cannot identify switch-port configuration. Confirm this topology before choosing the next command. The API VIP reservation and router-DHCP-excluded floating-IP range still need review too.
+**Remaining facts:** physical carrier and switch-port/VLAN behavior still need verification. The API VIP reservation and floating-IP pool's device exclusions also need review; the address table in Step 9 separates confirmed values from proposals.
 
 **Cause and effect:** working SSH proves the management path reaches the node. VM floating-IP traffic will also need the USB provider path. A detected USB adapter does not establish a working cable, link speed or switch/VLAN connection.
 
@@ -513,7 +515,7 @@ flowchart TD
     C -->|"Yes"| V["Read speed and duplex; verify switch and VLAN"]
 ```
 
-The USB NICs were DOWN in both the original discovery and this network report. The inspection left them in that state. We will review a targeted link-enabling step after reading the result; an inactive NIC is not enough evidence of a faulty adapter.
+The USB NICs were DOWN in both the original discovery and this network report. The inspection left them in that state. Step 9 tests them temporarily; an inactive NIC is not enough evidence of a faulty adapter.
 
 <details>
 <summary>Reference: completed network collection and report locations</summary>
@@ -536,9 +538,102 @@ Enter the node SSH passwords when asked. The script prints `Node 1/3`, `Node 2/3
 
 `COLLECTED` means the observation returned without a flagged command/state. `REVIEW` means read the reason: it can be an inactive NIC, unreadable link information, a failed lookup or a connection problem. Collection alone does not prove the provider network is ready.
 
-**The combined report has been reviewed above.** The missing input is where each USB cable goes: same LAN/switch as management, another VLAN, or currently unplugged. The script cannot infer switch-port configuration or router DHCP exclusions. A client route lookup also does not discover NAT translations.
+**The combined report has been reviewed above.** Joe subsequently confirmed the shared mini switch/LAN. The script cannot infer switch-port configuration or router DHCP exclusions. A client route lookup also does not discover NAT translations.
 
 Next, use that evidence to review provider links, the unused/reserved API VIP `.100`, DNS and a floating-IP range excluded from router DHCP. Host preparation and Cinder creation follow those input checks.
+
+</details>
+
+## 9. Test the USB links and review the address plan
+
+**Stage 0 — physical links first.** The report found each USB NIC disabled. A disabled interface cannot establish its usable Ethernet link. We will enable it briefly, measure carrier/speed/duplex, then return it to DOWN. Persistent Netplan and OpenStack configuration come later.
+
+### Address plan: confirmed values and proposals
+
+Joe confirms both NICs connect to the **same mini switch**, on **`192.168.0.0/24`**. The intended provider network is flat/untagged. A link test checks negotiation, not switch VLAN forwarding or VM connectivity.
+
+| Address or range | Purpose | Status |
+|---|---|---|
+| `192.168.0.1` | Router and DNS | Observed in all three node reports |
+| `192.168.0.2–149` | Router DHCP pool | Confirmed by Joe |
+| `192.168.0.100` | Planned OpenStack API VIP | Joe reports a reservation; exact exclusion/binding and current lease need clarification |
+| `192.168.0.150–199` | **Proposed** OpenStack external allocation pool: 50 addresses | Outside DHCP and before the node IPs; other static use is still unknown |
+| `192.168.0.200–202` | node1, node2, node3 management | Preserved; already in use |
+| `192.168.0.203–250` | No new allocation in this step | Outside reported DHCP; availability unknown |
+
+**Why not give OpenStack `.150–.250`?** That block includes the nodes at `.200–.202`. An address outside DHCP can also belong to a manually configured printer, VM or other device. A silent ping does not establish that an address is unallocated.
+
+**Why review `.100`?** It is inside DHCP's reported range. A DHCP reservation commonly binds an address to a client's MAC; an exclusion prevents DHCP allocation. Keepalived will move the statically configured VIP between controllers. We need `.100` withheld from other devices, with no conflicting lease/static user. Do not assign `.100` manually to all three nodes or invent a DHCP MAC for it.
+
+```mermaid
+flowchart TD
+    R["Router: .1; DHCP .2–.149"] <--> S["Mini switch: 192.168.0.0/24"]
+    S <--> M["Built-in NICs: .200, .201, .202"]
+    S <--> U["USB NICs: no host IP"]
+    M --> V["Future API VIP .100: one active owner"]
+    U --> N["Future Neutron external network"]
+    N --> P["Proposed pool .150–.199: unverified"]
+```
+
+The VIP is how clients reach OpenStack APIs. External allocation addresses are for Neutron router gateways and VM floating IPs. Neither is a new host address for `ext0`.
+
+### What the link-test script does
+
+The [Hermes wrapper](../scripts/test-provider-link.sh) runs the same [Python helper](../scripts/test-provider-link.py) on **node1 → node2 → node3** through SSH. It uses the recorded USB MACs from Step 8; interface names are discovered from those MACs.
+
+| Phase | Action and reason |
+|---|---|
+| Guard | Match hostname, management IP/MAC and USB identity; refuse an already-UP USB NIC, addresses, routes, bridge/VLAN use or uncertain network-service ownership |
+| Protect | Require networkd to report USB `unmanaged` and NetworkManager inactive; temporarily disable IPv6 **only on that empty USB interface** to prevent automatic IPv6 addresses/routes |
+| Measure | Set that USB NIC UP; allow up to 12 seconds for carrier and read sysfs carrier/speed/duplex with sudo |
+| Restore | Set USB DOWN, restore its prior IPv6 setting, recheck that management addresses/routes and provider ownership/state match the baseline |
+| Report | Save one private combined report on Hermes, plus per-node output/history |
+
+It issues no DHCP request, interface rename, static-IP assignment, route edit, Netplan change, package installation or disk operation. The temporary IPv6 setting is restored, not written into configuration files. The management NIC is never selected for a link write.
+
+**Why two passwords?** SSH authenticates `joe`; sudo authorizes protected observations and the temporary USB-only change. Type the relevant node's passwords when asked. There is no disk erase phrase in this test.
+
+### Run from Hermes
+
+In your existing `~/git/openstack-iac-lab` checkout on **Hermes**:
+
+```bash
+git pull --ff-only
+bash scripts/test-provider-link.sh joe --node all --apply
+```
+
+`--node all` selects all three sequentially. `--apply` permits the temporary test; without it, the script validates and prints a plan without writes. For a later targeted retry, `--node node2` selects just node2.
+
+### Read the result before continuing
+
+| Output | Meaning |
+|---|---|
+| `Measured: carrier=1; speed_Mbps=1000; duplex=full` | The USB NIC negotiated a gigabit full-duplex physical link during this test |
+| `RESTORED: USB DOWN ... management addresses/routes unchanged` | Restoration and the comparison passed |
+| `RESULT nodeN: LINK_OK` | Those gigabit readings **and** restoration passed; VLAN, throughput and VM traffic remain untested |
+| `RESULT nodeN: REVIEW` | No carrier, slower speed or incomplete readings; restoration passed and the wrapper continues to later nodes |
+| `STOP: ...` | Identity, ownership, command or restoration checks failed; the wrapper stops and does not attempt later nodes |
+| `RESTORATION NOT VERIFIED` or a lost SSH session | Do not infer the final state; review the report and use the node console to check that exact USB interface |
+
+**Why return to DOWN?** This step measures hardware without installing the final network configuration. A restored DOWN state is expected; later MAC-matched Netplan will keep `ext0` enabled for OpenStack.
+
+| Report on Hermes | Contents |
+|---|---|
+| `build/provider-link-report.txt` | Latest combined report to review together |
+| `build/provider-link-<timestamp>-<suffix>/` | Private history and individual node logs |
+
+The helper attempts restoration after measurement errors and handled interruptions. Power loss or an uncatchable kill cannot guarantee restoration. A failed SSH session is not a successful test. The script refuses to write if the USB MAC/interface index changes.
+
+**Current validation:** local mocked guard/restoration/transport tests pass; this new script has not run on the physical nodes. Review its combined report before persistent configuration.
+
+**Two address facts still needed:** is `.100` a DHCP exclusion or a MAC-bound reservation (which device, with any active lease)? Are any statically configured devices already using `.150–.199`? These answers do not block the independent physical link test; they do block committing the final cloud address allocation.
+
+<details>
+<summary>Primary references for the network choices</summary>
+
+- [Kolla 2026.1 quick start: external interface active without a host IP](https://docs.openstack.org/kolla-ansible/2026.1/user/quickstart.html)
+- [systemd 255 networkctl: unmanaged means networkd does not handle the link](https://www.freedesktop.org/software/systemd/man/255/networkctl.html)
+- [Linux per-interface IPv6 controls](https://docs.kernel.org/networking/ip-sysctl.html): `disable_ipv6` prevents IPv6 address/route creation on the selected interface. The helper first requires no existing addresses/routes and restores the prior setting with USB DOWN.
 
 </details>
 

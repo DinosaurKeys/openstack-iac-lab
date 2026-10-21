@@ -9,7 +9,7 @@ This repository contains implementation code and learning guides. The user has c
 - Checked all Ansible playbooks with ansible-playbook --syntax-check.
 - Exercised input guards for preserved node addresses, duplicate provider MACs, reserved floating addresses, and overlapping workload networks.
 - Exercised storage guards for wrong serials, mounted OS descendants, existing Ceph signatures, and partitioned/nonblank disks.
-- Ran 55 tests: 49 input/storage/confirmation checks and six terminal-driven integration cases. Disk reads/actions are fixtures or recorded mocks; no real disk operation is performed.
+- Ran 86 tests: the previous 55 input/storage/confirmation/terminal checks plus 31 USB link guard/restoration/transport checks. All hardware reads/actions and SSH connections in these tests are fixtures or recorded mocks; no real disk or NIC operation is performed.
 - Added regression coverage for the actual Linux model strings from all three nodes, rejection of unrecorded prefixes, diagnostic values before a model stop, and exact byte-capacity mismatch messages. Model/capacity failures still reject apply before any mutation or confirmation.
 - Tested the actual wrapper and real Python input through a pseudo-terminal with simulated SSH: full phrases reach all three nodes, a partial ERASE can be corrected, and cancellation/EOF/three mismatches stop without a disk command. Plan-only mode visits all three without asking for approval.
 - Compared LV aliases by their canonical device paths: a /dev/mapper name must resolve to the same device as the recorded /dev/VG/LV path. Regression fixtures accept that same-device alias and reject an unrelated LV; ownership checks remain exact.
@@ -87,4 +87,12 @@ The user's 2026-10-21 report reached all three nodes. Recorded management and US
 
 The report also contains ethtool netlink permission denials. The collector ran unprivileged; some get requests require privileges, but this report does not identify the denied subrequest. USB ethtool output shows Speed 1000Mb/s alongside Link detected no and admin DOWN. A usable gigabit provider link has not been established. The existing collector explicitly marks the DOWN provider state REVIEW.
 
-Hermes routes to the three nodes using ens33, local source 192.168.162.130 and next hop 192.168.162.2. NAT versus another routing arrangement has not been inferred from that route alone. Router DHCP exclusions, VIP reservation, USB cable/switch/VLAN placement and active provider-link verification remain open. The original uploaded report is unchanged and is not published to the repository.
+Hermes routes to the three nodes using ens33, local source 192.168.162.130 and next hop 192.168.162.2. NAT versus another routing arrangement has not been inferred from that route alone. The original uploaded report is unchanged and is not published to the repository.
+
+## Confirmed LAN plan and pending temporary link test
+
+Joe subsequently confirmed that both NICs connect to the same mini switch/LAN 192.168.0.0/24 and router DHCP serves 192.168.0.2–149. He reports a reservation at .100. Its exclusion versus MAC-binding semantics, bound device and current lease remain unknown. The proposed external allocation block .150–.199 avoids DHCP and the nodes .200–.202, but other static users are unverified. No private configuration flag or floating-pool value was automatically marked verified.
+
+The new test-provider-link wrapper/helper defaults to plan only. Apply requires exact recorded host/management/USB identity, an unused DOWN USB interface, no addresses/routes/master/uppers, networkd unmanaged status and inactive NetworkManager. It temporarily suppresses IPv6 on that USB NIC, brings it UP, reads physical negotiation, restores DOWN and the original IPv6 setting, and compares management address identity and routes. No persistent network file or management-interface setting is written. Handled interrupts enter restoration; power loss/uncatchable kills cannot guarantee cleanup. A restoration failure is a stop, never a passing result.
+
+The 31 new local tests cover identity/use/ownership refusals, plan without writes, gigabit/slower/missing-carrier outcomes, restoration after errors/interruption, changed-route rejection, failed-restoration rejection, remote helper quoting, all/single-node selection, private reports, continuation after a restored REVIEW and stop on a hard failure. These tests perform no real network mutation. The new physical USB test, VLAN forwarding and workload connectivity remain pending on the lab.

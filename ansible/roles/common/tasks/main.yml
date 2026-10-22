@@ -19,11 +19,13 @@
 - name: Maintain the three management-name entries
   ansible.builtin.blockinfile:
     path: /etc/hosts
+    backup: true
     marker: '# {mark} OPENSTACK IAC LAB'
     block: |
       192.168.0.200 node1
       192.168.0.201 node2
       192.168.0.202 node3
+  register: common_hosts_update
 - name: Read existing service units for the preview
   ansible.builtin.service_facts:
   when: ansible_check_mode

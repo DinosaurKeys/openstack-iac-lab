@@ -1,6 +1,6 @@
 # Stage 1 — Three controllers, two computes, one Cinder LVM host
 
-**Current checkpoint:** tools, SSH and Ansible sudo access are complete. The report starting `2026-10-22T10:14:57Z` confirms `ADMIN_ACCESS_OK for all`, with root UID `0` and the expected hostname on every node. **Next: [learn and preview the common role](02-ansible-roles.md#preview-the-common-role)** before installing packages or applying host configuration. The completed SSH lesson remains below.
+**Current checkpoint:** tools, SSH, sudo and the common-role preview are complete. The preview starting `2026-10-22T10:35:36Z` passed on all three: Chrony/time-zone data, replacement of `systemd-timesyncd` and a marked hosts block were predicted. **Next: [apply the reviewed common role and verify the real state](02-ansible-roles.md#apply-the-reviewed-common-role).** The actual installation remains pending. The completed SSH lesson remains below.
 
 ## SSH access for Ansible
 
@@ -92,7 +92,7 @@ The Ansible `ping` test uses SSH and Python, rather than ICMP. Its `changed: fal
 | node2 | `192.168.0.201` | Passed as `joe` | `pong` |
 | node3 | `192.168.0.202` | Passed as `joe` | `pong` |
 
-**Later confirmation:** the summary starting `2026-10-22T09:45:00Z` again reports `SSH_READY for all`, using the same key fingerprint. Key loading, public-key installation, fresh logins and the Ansible SSH/Python test completed. The administrator-access run starting `2026-10-22T10:14:57Z` then passed on all three. [The common-role preview is now the current checkpoint](02-ansible-roles.md#preview-the-common-role).
+**Later confirmation:** the summary starting `2026-10-22T09:45:00Z` again reports `SSH_READY for all`, using the same key fingerprint. Key loading, public-key installation, fresh logins and the Ansible SSH/Python test completed. The administrator-access run starting `2026-10-22T10:14:57Z` and common-role preview starting `2026-10-22T10:35:36Z` then passed on all three. [Applying the reviewed role is now the current checkpoint](02-ansible-roles.md#apply-the-reviewed-common-role).
 
 **Checkpoint complete:** Hermes can reach all three as `joe` using the selected key, and Ansible can execute Python. This step installed no node packages and changed no network, disk or sudo policy. It did not test Ansible privilege escalation or deploy OpenStack. No repeat SSH setup is needed; host configuration follows review of its remaining inputs.
 

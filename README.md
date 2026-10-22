@@ -2,9 +2,9 @@
 
 Three controllers on Ubuntu 24.04, Cinder LVM, Ansible, Terraform, an application, and monitoring.
 
-**Current step: Stage 1 — preview the common role.** SSH and sudo checks passed on all three nodes. [Read the package explanations, diagram and preview command](docs/02-ansible-roles.md#preview-the-common-role). Review the predicted packages, hostnames, hosts entries and clock-service changes before applying them.
+**Current step: Stage 1 — apply the reviewed common role.** The all-node preview passed. [Read the reviewed package transaction, diagram and one apply command](docs/02-ansible-roles.md#apply-the-reviewed-common-role). The wrapper applies the existing role, verifies packages/names/management IPs/Chrony, and saves one combined report.
 
-**Latest observed result:** the administrator-access report starting `2026-10-22T10:14:57Z` ends with `RESULT: ADMIN_ACCESS_OK for all`. Every node verified root UID `0` and the expected hostname, with `changed=0`, `unreachable=0` and `failed=0`. The earlier node2 password rejection is resolved for this run. Hermes tools and SSH remain ready; the common-role preview is next.
+**Latest observed result:** the common-role preview starting `2026-10-22T10:35:36Z` ends with `RESULT: COMMON_PREVIEW_OK for all`. Each node predicts Chrony plus `tzdata-legacy`, removal of `systemd-timesyncd`, and the marked hosts block: two changed tasks, zero failures. Hostnames match; the missing Chrony service check was deferred. These are predictions; the real apply remains pending.
 
 **Confirmed by Joe:** same mini switch/LAN `192.168.0.0/24`, DHCP `.2–.149`, `.100` reserved, and no static devices in `.150–.199`. He explicitly offers `.150/.151/.152`; final pool size still needs a choice because all current workloads together need five external addresses. The `.100` DHCP binding/current lease remain unspecified. [Read the ping interpretation and IP budget](docs/00-hermes-codex-and-node-reset.md#reviewed-windows-ping-and-address-budget).
 
@@ -46,8 +46,8 @@ Follow this table **from top to bottom**, reviewing the result at each stop. Com
 | 4 · Stage 1 — **done** | Resume collections completed; short summary reviewed | Finish collection installation and verify Python dependencies/tool locations | All phases COMPLETED; RESULT TOOLS_FOUND |
 | 5 · Stages 1 + 2 — **SSH done** | One public key added per node; fresh key login and Ansible Python checks passed | Let Ansible connect as `joe` using Hermes's selected private key | SSH_READY for all observed; host preparation follows input review |
 | 5a · Stage 1 — **done** | `check-admin.sh joe --node all` passed | Verify Ansible sudo access and node identity | ADMIN_ACCESS_OK for all observed |
-| 5b · Stages 1 + 2 — **current** | `preview-common.sh joe --node all` | Learn the common role and review its predicted package/name/time changes | COMMON_PREVIEW_OK plus review of the actual proposed changes |
-| 5c · Stages 1 + 2 — later | Apply the reviewed common role | Prepare host packages, names and time synchronization | Real result reviewed; configuration repeatable |
+| 5b · Stages 1 + 2 — **done** | `preview-common.sh joe --node all` passed | Learn the common role and review its package/name/time predictions | COMMON_PREVIEW_OK for all; actual proposals reviewed |
+| 5c · Stages 1 + 2 — **current** | `apply-common.sh joe --node all --apply` | Prepare packages, names and time, then verify the real state | Review COMMON_APPLIED_OK and the actual report |
 | 6 · Stages 1 + 2 | `labctl netplan`, then the console procedure in Stage 2, one node at a time | Bind each USB MAC to `ext0` and retain the original management address | SSH, DNS, default route and provider link checked |
 | 7 · Stage 1 | `labctl --ask-become-pass storage` | Create **one** `cinder-volumes` VG on the reviewed blank node3 SATA disk | node3 SATA owns Cinder; Ubuntu VG stays separate |
 | 8 · Stage 1 | `labctl init-config`, then the Kolla phases below | Deploy the control, networking, compute and volume services | Kolla checks and service lists pass |
@@ -104,7 +104,7 @@ For `first`, `app` or `monitor`, run `python scripts/labctl.py terraform NAME AC
 | Reviewed node3 disk reuse and unresolved diagnostic limitations | Deleting Ceph does not repair hardware or resolve a failed NVMe log query |
 | Non-overlapping tenant CIDRs, HCP organization/workspaces and scoped cloud credentials | These depend on your network and accounts |
 
-**Current checkpoint: row 5b, common-role preview.** Follow the [short workbook](docs/02-ansible-roles.md#preview-the-common-role), run its one wrapper and share the proposed changes. This step uses the tracked preparation inventory. Later network/storage/cloud configuration still needs its reviewed inputs.
+**Current checkpoint: row 5c, common-role application.** Follow the [reviewed apply lesson](docs/02-ansible-roles.md#apply-the-reviewed-common-role), run its one wrapper and share the printed summary. This step uses the tracked preparation inventory. Later network/storage/cloud configuration still needs its reviewed inputs.
 
 <details>
 <summary>Reference: first checkout and initial discovery</summary>

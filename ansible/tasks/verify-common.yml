@@ -1,0 +1,95 @@
+---
+- name: Show the hosts backup created by this run
+  ansible.builtin.debug:
+    msg: "Previous hosts file saved as {{ common_hosts_update.backup_file }}"
+  when: common_hosts_update.backup_file | default('') | length > 0
+- name: Read installed package versions
+  ansible.builtin.package_facts:
+    manager: apt
+- name: Read the applied hostname
+  ansible.builtin.command: hostname -s
+  register: common_hostname
+  changed_when: false
+- name: Read the management interface addresses
+  ansible.builtin.command:
+    argv: [ip, -j, -4, address, show, dev, "{{ management_interface }}"]
+  register: common_addresses
+  changed_when: false
+- name: Read the three names through the node resolver
+  ansible.builtin.getent:
+    database: ahostsv4
+    key: "{{ item }}"
+  loop: [node1, node2, node3]
+  register: common_resolution
+- name: Read the actual service states
+  ansible.builtin.service_facts:
+- name: Require the installed baseline and preserved management address
+  ansible.builtin.assert:
+    that:
+      - common_packages | difference(ansible_facts.packages.keys() | list) | length == 0
+      - common_hostname.stdout | trim == inventory_hostname
+      - (common_addresses.stdout | from_json) | length == 1
+      - >-
+        (common_addresses.stdout | from_json)[0].addr_info
+        | selectattr('local', 'equalto', management_address.split('/')[0])
+        | selectattr('prefixlen', 'equalto', management_address.split('/')[1] | int)
+        | list | length == 1
+      - ansible_facts.services.get('chrony.service', {}).get('state') == 'running'
+      - ansible_facts.services.get('chrony.service', {}).get('status') == 'enabled'
+    fail_msg: Baseline verification failed; review packages, hostname, management address or Chrony service in this report.
+    quiet: true
+- name: Require each node name to resolve to its preserved management IP
+  ansible.builtin.assert:
+    that:
+      - item.ansible_facts.getent_ahostsv4.keys() | list == [hostvars[item.item].ansible_host]
+    fail_msg: "Unexpected IPv4 resolution for {{ item.item }}: {{ item.ansible_facts.getent_ahostsv4.keys() | list }}. Review existing hosts entries and resolver behavior."
+    quiet: true
+  loop: "{{ common_resolution.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+- name: Show the declared package versions
+  ansible.builtin.debug:
+    msg: "{{ item }}={{ ansible_facts.packages[item][0].version }}"
+  loop: "{{ common_packages }}"
+- name: Wait for Chrony synchronization with twelve checks two seconds apart
+  ansible.builtin.command:
+    argv: [chronyc, waitsync, '12', '0', '0', '2']
+  register: common_waitsync
+  changed_when: false
+  failed_when: false
+- name: Read Chrony tracking evidence
+  ansible.builtin.command:
+    argv: [chronyc, -n, tracking]
+  register: common_tracking
+  changed_when: false
+  failed_when: false
+  environment:
+    LC_ALL: C
+- name: Read Chrony source evidence
+  ansible.builtin.command:
+    argv: [chronyc, -n, sources, -v]
+  register: common_sources
+  changed_when: false
+  failed_when: false
+  environment:
+    LC_ALL: C
+- name: Show the synchronization result and time sources
+  ansible.builtin.debug:
+    msg: >-
+      {{ ['waitsync exit=' ~ common_waitsync.rc]
+         + common_waitsync.get('stdout_lines', []) + common_waitsync.get('stderr_lines', [])
+         + ['tracking exit=' ~ common_tracking.rc]
+         + common_tracking.get('stdout_lines', []) + common_tracking.get('stderr_lines', [])
+         + ['sources exit=' ~ common_sources.rc]
+         + common_sources.get('stdout_lines', []) + common_sources.get('stderr_lines', []) }}
+- name: Require Chrony to report synchronization
+  ansible.builtin.assert:
+    that:
+      - common_waitsync.rc == 0
+      - common_tracking.rc == 0
+      - common_sources.rc == 0
+    fail_msg: Chrony has not verified synchronization within twelve checks; review the recorded tracking/source output before another apply.
+    quiet: true
+- name: Mark the verified common role application
+  ansible.builtin.debug:
+    msg: "COMMON_APPLIED_OK: {{ inventory_hostname }}; packages, hostname, name resolution, management IP and Chrony verified."

@@ -1,8 +1,96 @@
 # Stage 2 — Ansible roles, YAML inventory, and node rebuilding
 
-**Current checkpoint:** Stage 1 host preparation, using the Ansible roles explained here. SSH and sudo checks have passed on all three nodes. **Next: preview the common role.**
+**Current checkpoint:** Stage 1 host preparation, using the Ansible roles explained here. SSH, sudo and the common-role preview passed on all three nodes. **Next: apply the reviewed common role and verify the result.**
+
+## Apply the reviewed common role
+
+### 1. Read the successful preview
+
+Report start: **`2026-10-22T10:35:36Z`**. Final result: **`COMMON_PREVIEW_OK for all`**.
+
+| Node | Preserved address | Preview recap |
+|---|---|---|
+| node1 | `192.168.0.200` | `changed=2`, `failed=0`, `unreachable=0`, `skipped=1` |
+| node2 | `192.168.0.201` | `changed=2`, `failed=0`, `unreachable=0`, `skipped=1` |
+| node3 | `192.168.0.202` | `changed=2`, `failed=0`, `unreachable=0`, `skipped=1` |
+
+**Two changed tasks:** the APT package task and the marked `/etc/hosts` block. These were predictions. Hostnames already matched. The Chrony service task was skipped because the package was still absent; the explicit `DEFERRED` message was expected.
+
+### 2. What the real run will change
+
+| Observed proposal, on every node | Purpose and location |
+|---|---|
+| Install `chrony` | Ubuntu system clock service; commands under `/usr`, configuration under `/etc/chrony` |
+| Install `tzdata-legacy` | Supporting time-zone data selected by APT; a system data package on each node |
+| Remove `systemd-timesyncd` | Replace the installed time client with the role's chosen Chrony service |
+| Add the marked `/etc/hosts` block | Map `node1` → `.200`, `node2` → `.201`, `node3` → `.202` locally on each node |
+| Enable/start Chrony | Synchronize the node's system clock using its installed configuration |
+
+APT proposed no new installation for the other six declared packages. Their purposes are explained in the [completed preview lesson](#preview-the-common-role). `tzdata-legacy` is an automatically selected supporting package; it is not an extra role or time service.
+
+The preview showed **0 upgrades**, with **27 packages not upgraded on node1/node3 and 28 on node2**. Those counts describe available packages outside that transaction. This role requests package presence, rather than a full operating-system upgrade.
+
+**Preview limitation:** a real run re-evaluates the desired configuration and can refresh APT metadata older than one hour. It is not a saved package transaction. The actual package versions and dependency changes will be recorded in the real report.
+
+If `/etc/hosts` changes, Ansible saves its previous contents to a dated backup on that node and prints the backup path. The role preserves the management IP configuration; verification reads the actual address afterward.
+
+### 3. Apply on one node at a time
+
+`scripts/apply-common.sh` runs the same `base.yml` and `common` role, then checks the actual result. Hermes uses its existing project environment and SSH key; the system package installation happens on the selected nodes.
+
+```mermaid
+flowchart TD
+    A["Apply common on selected node"] --> B["Verify actual configuration"]
+    A -->|"Task fails"| F["Stop and save report"]
+    B -->|"Check fails"| F
+    B -->|"Passed; nodes remain"| A
+    B -->|"Last node passed"| S["Combined verified result"]
+```
+
+**Run on Hermes from `~/git/openstack-iac-lab`:**
+
+```bash
+git pull --ff-only
+bash scripts/apply-common.sh joe --node all --apply
+```
+
+**This command makes real package/name/time changes.** `--apply` selects that behavior explicitly. Each node asks separately for its Ubuntu `joe` password at `BECOME password:`. The wrapper uses the fixed node addresses and existing `~/venvs/kolla-iac` tools.
+
+### 4. What the script verifies
+
+| Check | Required result |
+|---|---|
+| Package facts | All seven declared common packages are installed; versions are printed |
+| Hostname | Matches the selected inventory node |
+| Built-in management NIC | Still has that node's preserved IP and `/24` prefix |
+| IPv4 name resolution | Each of `node1`, `node2`, `node3` resolves to its preserved IP |
+| Chrony service | Running and enabled at boot |
+| `chronyc waitsync 12 0 0 2` | Reports synchronization within 12 checks, two seconds apart |
+
+The two zero arguments disable extra correction/skew thresholds; the check requires Chrony to report synchronization. It does not certify a particular clock-accuracy limit. Tracking and time-source output are included for review.
+
+On an apply run, `changed` counts **tasks that actually changed configuration**. Its value can differ from the preview. Verification reads report no configuration changes.
+
+Expected final line:
+
+```text
+RESULT: COMMON_APPLIED_OK for all; installed baseline and time synchronization verified.
+```
+
+The wrapper prints the short summary and saves **`build/common-apply-summary.txt`** plus **`build/common-apply-report.txt`** privately. Timestamped history remains under ignored `build/`; preview reports are separate.
+
+**On failure:** the wrapper stops before the next node. Completed changes remain; this is not an automatic rollback. A missing completion marker also prevents a success claim. Review the actual failed task and existing report before another apply. Resolver failures show the unexpected addresses; synchronization failures include Chrony's tracking/source output.
+
+**Share the printed apply summary.** We will review the real result before networking changes. The role itself performs no Netplan edit, disk allocation or OpenStack deployment. The real apply remains unverified until its report is supplied.
+
+Sources: [Ubuntu time synchronization](https://ubuntu.com/server/docs/how-to/networking/timedatectl-and-timesyncd/), [Ubuntu tzdata packages](https://packages.ubuntu.com/search?keywords=tzdata), [Ansible APT semantics](https://docs.ansible.com/projects/ansible/latest/collections/ansible/builtin/apt_module.html), [Chrony waitsync](https://chrony-project.org/doc/4.5/chronyc.html#waitsync).
+
+<details>
+<summary>Completed lesson: package purposes, common-role structure and the preview command</summary>
 
 ## Preview the common role
+
+**Completed:** the real preview starting `2026-10-22T10:35:36Z` passed on all three nodes. Continue with the apply lesson above. This reference explains the package list and the preview behavior.
 
 ### 1. What we have proved
 
@@ -94,6 +182,8 @@ The script prints all node output and a short summary. The combined proposed cha
 **Share the preview output, including proposed package and `/etc/hosts` changes.** We will review those details before the real common-role run. A successful preview is not a completed host installation.
 
 Sources: [Ansible check and diff modes](https://docs.ansible.com/projects/ansible/latest/playbook_guide/playbooks_checkmode.html), [APT module](https://docs.ansible.com/projects/ansible-core/2.20/collections/ansible/builtin/apt_module.html), [Ubuntu time synchronization](https://ubuntu.com/server/docs/how-to/networking/timedatectl-and-timesyncd/).
+
+</details>
 
 <details>
 <summary>Completed lesson: Ansible sudo access and the resolved node2 password rejection</summary>

@@ -9,3 +9,6 @@
       ansible.builtin.debug:
         msg: "COMMON_PREVIEW_OK: {{ inventory_hostname }}; predictions only; service startup still requires a real run."
       when: ansible_check_mode
+    - name: Verify the applied common configuration
+      ansible.builtin.include_tasks: ../tasks/verify-common.yml
+      when: not ansible_check_mode

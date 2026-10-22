@@ -1,8 +1,222 @@
-# Stage 1 — Three controllers, two computes, one Cinder LVM host
+# Stage 1 — Install OpenStack
 
-**Current checkpoint:** common-role verification stopped on node1 in the report starting `2026-10-22T12:12:23Z`: its name returned both `127.0.1.1` and `192.168.0.200`. Node1's packages, hostname, management IP and running/enabled Chrony passed; clock synchronization and later nodes remain unverified. **Next: [pull the hostname correction and resume the existing wrapper](02-ansible-roles.md#resolve-duplicate-hostname-lookup).** Tools, SSH, sudo and the earlier preview remain complete.
+**Goal:** install the selected three-controller OpenStack layout with Cinder LVM. **Kolla-Ansible deployment has not started.** The Ansible work so far has checked access and prepared basic host settings.
+
+## Where we are
+
+| Complete | Still ahead |
+|---|---|
+| Ubuntu reinstall, old Ceph cleanup, physical USB link tests | Review deployment inputs |
+| Hermes tools, key login, Ansible sudo checks | Configure networking and node3 LVM |
+| Common-role preview, apply and verification on all three | Run Kolla-Ansible and verify services/APIs |
+
+**Current checkpoint:** the report starting `2026-10-22T12:31:45Z` confirms `COMMON_APPLIED_OK for all`. The hostname issue is resolved. Continue at **Step 2**, without repeating common or access setup.
+
+The route below stays in this chapter. Completed SSH/tool lessons are [collapsed at the end](#reference-completed-setup).
+
+| Step | Purpose | Changes where? |
+|---|---|---|
+| 1 · complete | Common host settings verified | All three nodes, through Ansible |
+| **2 · current** | **Review one deployment configuration** | Private files on Hermes |
+| 3 | Apply host networking and create one Cinder VG | Node NIC settings; node3's dedicated SATA disk |
+| 4 | Install OpenStack with Kolla-Ansible | Container runtime and OpenStack services on nodes |
+| 5 | Verify APIs and seed the cloud | The new OpenStack cloud |
+
+## 1. Finish the common baseline
+
+**Complete — no rerun needed.** Your report starting `2026-10-22T12:31:45Z` confirms:
+
+| Node | Actual change in this run | Verified result |
+|---|---|---|
+| node1 · `.200` | Corrected the hosts file; `changed=1` | All common checks passed |
+| node2 · `.201` | Installed Chrony/supporting data and corrected hosts; `changed=2` | All common checks passed |
+| node3 · `.202` | Installed Chrony/supporting data and corrected hosts; `changed=2` | All common checks passed |
+
+Each recap has `failed=0`, `unreachable=0`. All three verified packages, hostname, original management address, exact name resolution, running/enabled Chrony and successful synchronization commands.
+
+**What you learned:** `/etc/hosts` maps names to IPs; Chrony keeps time synchronized. The earlier role added the management mappings but left `127.0.1.1 nodeN` aliases. The corrected role removed those exact aliases, kept the management mappings and saved a hosts backup on each node. Your new diffs show this correction worked.
+
+Node2/node3 installed `chrony` and APT's supporting `tzdata-legacy`, replacing `systemd-timesyncd`. Node1 already had the packages. [All seven common package purposes](02-ansible-roles.md#what-the-common-role-manages).
+
+The final result is **`COMMON_APPLIED_OK for all`**. These are host settings, not OpenStack services. Continue with Step 2.
+
+## 2. Review one deployment configuration
+
+**Why:** Kolla must know which NIC, address and disk belong to each service. These are deployment settings, not more installation tools.
+
+Keep the reviewed values in ignored `private/lab.yml`, based on [config/lab.yml.example](../config/lab.yml.example). Generate inventories from that file rather than maintaining two live configurations.
+
+| Setting | Known value / required review |
+|---|---|
+| Nodes and account | `node1=.200`, `node2=.201`, `node3=.202`; login `joe` |
+| Management | `enp0s31f6`, `192.168.0.0/24`; gateway/DNS `.1` recorded in Stage 0 |
+| USB MACs | node1 `00:e0:4c:55:7e:58`; node2 `00:e0:4c:2c:16:78`; node3 `00:e0:4c:30:46:88` |
+| Provider | MAC-matched name `ext0`, no host IP; flat `physnet1` on the same mini switch |
+| Initial external pool | `192.168.0.150–152`, explicitly offered by Joe; enough for the first workload |
+| API VIP | `.100` is reserved; **DHCP device/product, binding and conflicting lease/use still need review** |
+| Cinder host | node3; SATA identity below; recorded SMART `PASSED`, zero reported-uncorrectable errors, no ATA errors, cleanup `CLEANED` |
+
+**Remaining input: the VIP's DHCP binding/current use.** Node3's SATA reuse review can use the already recorded health snapshot and successful cleanup; no new storage scan is requested. The storage action still checks the actual target's identity and current use before provisioning. The template's verification fields record these reviews; they are not filled automatically by copying the file.
+
+**Detail to establish:** which device/software provides DHCP, which device/MAC owns the `.100` reservation, and whether it has a lease or another active user. Because `.100` is inside the reported DHCP range, its reservation must prevent a competing assignment while Keepalived moves the VIP between controllers. Gateway/DNS, node IPs, NIC MACs and the SATA target are already recorded.
+
+### What I simulated before recommending the next command
+
+| Local check | Result |
+|---|---|
+| Real hosts-only generator with the pinned full Kolla sample | Passed; service groups and preserved IPs matched the intended layout |
+| Real Ansible Netplan role for all three nodes | Passed; correct management IPs/MACs, no host IP on `ext0` |
+| Repeat the same render | Passed; no candidate changed |
+| Missing review flags / duplicate USB MAC | Refused as expected |
+| Existing regression suite | All 147 tests passed, including the actual hosts-template preview/apply/repeat fixture |
+
+**Scope:** temporary local files, with local transport forced. The successful-generation fixture uses explicitly synthetic acceptance flags; it does not approve the real VIP or disk. No lab SSH, live Netplan activation, disk provisioning or Kolla deployment was performed. Real NIC/USB behavior, DHCP ownership and OpenStack runtime still require lab evidence.
+
+The initial three-address pool is enough for a router gateway and the first VM's floating IP. Before keeping first/app/monitor together, expand the reviewed pool or remove the disposable first workload; their combined budget is five. This later capacity choice does not delay the initial cloud.
+
+<details>
+<summary>After input review: create the private file once and generate hosts-only configuration</summary>
+
+Run later, after Step 1 and the input review. Activate the existing project environment once for the `labctl` commands below:
+
+```bash
+source ~/venvs/kolla-iac/bin/activate
+install -d -m 0700 private
+test -e private/lab.yml || cp config/lab.yml.example private/lab.yml
+chmod 600 private/lab.yml
+```
+
+Edit the copied file with the reviewed values before generating. A copied template is not a completed configuration. `fresh_install_confirmed` records the already confirmed three OS reinstalls; other verification fields require their own evidence.
+
+```bash
+python scripts/labctl.py configure --hosts-only
+```
+
+This writes private `build/inventory.yml`, `build/kolla-inventory.yml` and `build/globals.yml` on Hermes. It does not change the nodes. **HCP organization/workspaces, tenant CIDR checks and application settings can wait for their later stages.** The `--hosts-only` option deliberately excludes those requirements.
+
+Inspect the generated Kolla inventory graph:
+
+```bash
+ansible-inventory -i build/kolla-inventory.yml --graph
+```
+
+Expected placement: control/network all three; compute node2/node3; storage, `cinder-volume`, `cinder-volume-lvm` and `tgtd` only node3; Glance only node1. The renderer uses the full installed Kolla sample and retains its service hierarchy. The smaller preparation inventory is not a replacement for it.
+
+</details>
+
+## 3. Configure networking and one Cinder VG
+
+**Later step:** Step 1 must pass and Step 2's configuration must be reviewed/generated first. Keep the project environment active for `labctl` commands.
+
+### Networking
+
+**Effect:** keep `.200/.201/.202` on each built-in management NIC; match each USB adapter by its actual MAC and name it `ext0`, without a host IP. The USB interface becomes the provider connection for VM traffic.
+
+```bash
+python scripts/labctl.py netplan
+```
+
+This only renders three candidates in `build/netplan/` **on Hermes**. It does not install or activate them on the nodes.
+
+Install one candidate at a time from the node console: compare all current `/etc/netplan` files, retain a private backup, and resolve conflicting definitions before replacing them. Then run:
+
+```bash
+sudo netplan generate
+sudo netplan try --timeout 120
+```
+
+Before accepting, verify SSH from Hermes, the preserved management IP/default route, DNS and `ext0`'s link with no host IP. If the trial times out, check the actual restored state at the console. Proceed to the next node only after the current node works. The exact file replacement depends on the existing node configuration; do not invent or delete an installer filename.
+
+### Cinder storage
+
+**Effect:** create one `cinder-volumes` LVM volume group on node3's reviewed blank SATA disk. Its Ubuntu installation remains on NVMe. Node1/node2 SATA disks stay unallocated.
+
+| Target | Recorded identity |
+|---|---|
+| Host | node3 · `192.168.0.202` |
+| Disk | `/dev/disk/by-id/ata-KINGSTON_SA400S37240G_50026B768317883A` |
+| Serial | `50026B768317883A` |
+| Capacity | `240057409536` bytes |
+
+Old Ceph cleanup already completed on all three; it does not need repeating. The existing node3 SATA findings support this lab reuse review; they are a health snapshot, not a guarantee against future failure. NVMe self-test-log query failures and node1's unused SATA bad-block count remain separate follow-up items. Once the target/review are recorded in the private configuration:
+
+```bash
+python scripts/labctl.py --ask-become-pass storage
+```
+
+The existing guard checks the selected disk and refuses mounted/owned or mismatched targets. It asks for `node3:50026B768317883A` before provisioning. Verify that `cinder-volumes` uses this SATA disk and stays separate from `ubuntu-vg`. This creates storage capacity, not OpenStack services or storage replication.
+
+## 4. Install OpenStack with Kolla-Ansible
+
+**Prerequisites:** common passed on all three; reviewed configuration generated; networking working; node3 Cinder VG prepared. The selected Kolla source is pinned to `15ce36696a21356eb59abb4473e210f13cf7c98c` for stable/2026.1. OS packages and container tags are separately moving inputs; record their actual deployed versions/digests.
+
+First initialize the new project's Kolla configuration:
+
+```bash
+python scripts/labctl.py init-config
+```
+
+This writes `~/.config/kolla-iac-lab/globals.yml` and creates and generates `passwords.yml` only when that file is absent. Existing new-project passwords are retained. Keep these private. The old `/etc/kolla` is not the configuration directory for this rebuild.
+
+**Kolla-Ansible is the Ansible-based OpenStack installer.** Its phases have different effects. Run each separately using `python scripts/labctl.py --ask-become-pass kolla PHASE`, replacing `PHASE` with the next row:
+
+| Order / phase | What happens | Finish condition |
+|---|---|---|
+| 1 · `bootstrap-servers` | Prepare the hosts and container runtime | Host preparation completes |
+| 2 · `prechecks` | Check configuration, inventory and release prerequisites | All required checks pass |
+| 3 · `pull` | Download the selected container images | Downloads complete |
+| 4 · `deploy` | Configure and start OpenStack services | Deployment tasks complete |
+| 5 · `post-deploy` | Generate client access configuration | New cloud credentials/configuration created |
+| 6 · `check` | Run Kolla's service checks | Checks pass |
+
+This is the installation sequence, not another set of tutorials to complete first. `--ask-become-pass` enables Ansible's sudo prompt; do not put a password in Git. If one phase fails, diagnose that phase rather than restarting all preparation.
+
+**Cinder LVM limitation:** Kolla documents caveats with multiple controllers. We use one backend host, keep all prechecks enabled, and later verify volume access from both computes. A failing precheck is investigated; it is never skipped to claim success.
+
+## 5. Verify APIs and seed the cloud
+
+After `post-deploy`, load the **new** admin credentials it actually generated. Source its `admin-openrc.sh` if present, or select its `clouds.yaml` and generated cloud name. Do not print or commit credentials.
+
+```bash
+openstack token issue -c expires -f value
+openstack compute service list
+openstack hypervisor list
+openstack network agent list
+openstack volume service list
+```
+
+Review actual service state/placement: two computes, the configured network agents, one Cinder LVM backend on node3 and controller services matching the inventory. A running service list alone does not prove VM traffic or persistent data access.
+
+Before the seed command, select an existing **public** VM-login key in `workloads.public_key_path`; the template path is an example, not evidence that the file exists. Confirm image/flavor names and that the 2-vCPU, 2-GiB RAM, 15-GiB disk flavor fits available resources.
+
+```bash
+python scripts/labctl.py init-cloud
+```
+
+This seeds a flat external network/subnet using the reviewed `.150–.152` allocation pool, a checksum-verified Ubuntu 24.04 cloud image, the flavor and public key. It uses the current OpenStack CLI identity. The network name `public` does not make these LAN addresses internet-public.
+
+**Stage 1 finish:** Kolla deployment/checks and API/service checks pass, with results recorded. Stage 2 explains the roles already used. Stage 3 creates the first VM; its floating-IP and cross-compute Cinder test must pass before Stage 4's database. We do not label those runtime tests complete before running them.
+
+<details>
+<summary>Later acceptance, failover and recovery</summary>
+
+For Cinder acceptance, use a disposable 1-GiB volume and VMs on node2/node3. Identify the new guest disk, write a checksum-tested file, detach cleanly, reattach on the other compute, and verify the same data. Review the actual guest device before any formatting command.
+
+Test one-controller loss only after the cloud is healthy. Node1 also carries Glance and node3 carries LVM, so losing either has storage consequences. A quorum of controllers does not replicate those disks. After a whole-cluster shutdown, use the selected release's MariaDB recovery procedure rather than deleting databases or resetting RabbitMQ blindly.
+
+Expansion keeps the three controller IPs and follows the release's add-host procedure for new computes. Redundant Glance/Cinder storage is a separate design and migration task.
+
+</details>
+
+## Reference: completed setup
+
+The lessons below explain earlier results. **Do not rerun their setup commands; those checkpoints are complete.**
+
+<details>
+<summary>SSH lesson: private/public keys, passphrases, agent and successful node access</summary>
 
 ## SSH access for Ansible
+
 
 ### The idea: Hermes proves its identity
 
@@ -92,9 +306,9 @@ The Ansible `ping` test uses SSH and Python, rather than ICMP. Its `changed: fal
 | node2 | `192.168.0.201` | Passed as `joe` | `pong` |
 | node3 | `192.168.0.202` | Passed as `joe` | `pong` |
 
-**Later confirmation:** the summary starting `2026-10-22T09:45:00Z` again reports `SSH_READY for all`, using the same key fingerprint. Key loading, public-key installation, fresh logins and the Ansible SSH/Python test completed. The administrator-access run starting `2026-10-22T10:14:57Z` and common-role preview starting `2026-10-22T10:35:36Z` then passed on all three. [Correcting node1's duplicate hostname result is now the current checkpoint](02-ansible-roles.md#resolve-duplicate-hostname-lookup).
+**Later confirmation:** the summary starting `2026-10-22T09:45:00Z` again reports `SSH_READY for all`, using the same key fingerprint. Key loading, public-key installation, fresh logins and the Ansible SSH/Python test completed. The administrator-access run starting `2026-10-22T10:14:57Z` and common-role preview starting `2026-10-22T10:35:36Z` then passed on all three. [The current action is Step 2 above](#2-review-one-deployment-configuration).
 
-**Checkpoint complete:** Hermes can reach all three as `joe` using the selected key, and Ansible can execute Python. This step installed no node packages and changed no network, disk or sudo policy. It did not test Ansible privilege escalation or deploy OpenStack. No repeat SSH setup is needed; host configuration follows review of its remaining inputs.
+**Checkpoint complete:** Hermes can reach all three as `joe` using the selected key, and Ansible can execute Python. This step installed no node packages and changed no network, disk or sudo policy. It did not test Ansible privilege escalation or deploy OpenStack. No repeat SSH setup is needed. Continue at Step 2 above.
 
 <details>
 <summary>Completed setup and troubleshooting reference</summary>
@@ -131,335 +345,43 @@ Sources:
 
 </details>
 
-## 1. Finish the Hermes tool setup
-
-### Observed Hermes tool setup
-
-Your resume report started at `2026-10-21T20:35:49Z` and ended with **`RESULT: TOOLS_FOUND`**.
-
-| Check | Observed result | Meaning |
-|---|---|---|
-| Kolla collections | COMPLETED | Kolla's collection install command succeeded |
-| Project collections | COMPLETED | The project's collection install command succeeded |
-| Python dependency check | COMPLETED | `pip check` found no broken declared package requirements |
-| Version manifest and collection list | Completed | The script saved Python versions and successfully listed collections; exact collection versions are in the full log |
-| Tool locations | All eight found | Doctor found every requested executable |
-
-| Tools | Location confirmed by the report |
-|---|---|
-| Python, Ansible playbook/inventory, Kolla-Ansible, OpenStack client | `/home/joe/venvs/kolla-iac/bin/` |
-| SSH and Git | `/usr/bin/ssh`, `/usr/bin/git` |
-| Terraform | `/usr/bin/terraform` |
-
-**What changed?** The PATH correction allowed the recovery to finish the collection setup that failed earlier. The project environment supplied the intended Python/Ansible/Kolla/OpenStack commands. Terraform was already available; this recovery did not install it. The summary establishes its location, not its version or provider operation.
-
-**This checkpoint is complete.** The result verifies collection command completion, declared Python dependencies and executable discovery. It does not test node SSH access, OpenStack APIs or a running cloud. No deployment was attempted. SSH access as `joe` has since passed on all three nodes; reviewed host configuration comes later.
+</details>
 
 <details>
-<summary>Completed recovery lesson: collection purposes, script actions and command</summary>
+<summary>Hermes tools: what was installed and the completed collection recovery</summary>
+
+## 1. Finish the Hermes tool setup
+
+**Completed:** `TOOLS_FOUND`, report starting `2026-10-21T20:35:49Z`. Kolla/project collections and Python dependency checks completed. No cloud deployment was attempted.
+
+| Tool / location | Purpose |
+|---|---|
+| `~/venvs/kolla-iac` | Separate Python environment for this project's tools |
+| Ansible inside that environment | Runs YAML tasks against selected nodes |
+| Kolla-Ansible inside that environment | Supplies the OpenStack deployment playbooks/CLI |
+| OpenStack client inside that environment | Calls the cloud APIs after deployment |
+| PyYAML and supporting Python libraries | Read configuration and support the tools |
+| `build/collections` | Project-local Ansible modules/roles/plugins |
+| `/usr/bin/ssh`, `/usr/bin/git`, `/usr/bin/terraform` | Executables found by the completed tool check |
+
+Terraform was already present, not installed by this recovery. Package/library names in the installation log do not mean OpenStack server services were deployed.
 
 ### Resume collections on Hermes
 
-**Why this step?** The previous run installed Ansible, Kolla-Ansible and the OpenStack client, then stopped because Kolla could not find `ansible-galaxy`. The recovery adds the installed environment to PATH before calling it.
-
-**What is a collection?** A bundle of Ansible modules, roles and plugins. Ansible is the engine; collections provide additional tasks it can run later.
-
-| Collections to install | Purpose |
-|---|---|
-| `openstack.kolla` | Kolla's shared OpenStack deployment roles/modules |
-| `ansible.netcommon`, `ansible.utils`, `ansible.posix` | Network utilities and Linux administration modules |
-| `community.crypto`, `community.general` | Certificate and general administration modules |
-| `community.docker`, `containers.podman` | Modules for managing container engines |
-| `community.postgresql` | Modules for the later PostgreSQL lesson |
-
-They install on **Hermes**, under **`~/git/openstack-iac-lab/build/collections`**. These are task libraries: this step does not install PostgreSQL or container engines on the nodes. The Kolla requirements come from the installed pinned release; the project adds its requirements from `ansible/requirements.yml`. Resolved collection versions will be listed in the log.
-
-| Script action | Effect |
-|---|---|
-| Use `~/venvs/kolla-iac/bin` on PATH | Make Kolla and its child `ansible-galaxy` discover the same installed tools |
-| Install Kolla and project collections | Finish the interrupted downloads; skip APT, venv creation and `pip install` |
-| Check Python dependencies and run doctor | Check installed package consistency and executable locations |
-
-**Run on Hermes:**
-
-```bash
-cd ~/git/openstack-iac-lab
-git pull --ff-only
-bash scripts/prepare-hermes.sh --resume-collections
-cat build/hermes-tools-summary.txt
-```
-
-The last line only displays the short report. Resume mode uses no sudo and makes no node or cloud configuration changes. Downloads may take several minutes. It stops on a failed collection/dependency command rather than continuing into deployment.
-
-**Read the short result:** `build/hermes-tools-summary.txt`. The full log remains `build/hermes-tools-report.txt`; timestamped history includes `python-versions.txt`.
-
-| Result | Meaning |
-|---|---|
-| Collection/check lines say `COMPLETED`, then `RESULT: TOOLS_FOUND` | Installation and the listed tool-location checks passed; deployment has not started |
-| `RESULT: REVIEW` | Read the actual `MISSING` entry; Terraform is needed by Stage 3 |
-| `STOPPED` or expected executable missing | Read the failed phase/error in the full log before another attempt |
-
-**Reviewed result:** the supplied resume summary passed on Hermes as recorded above. This command is a completed-step reference; no repeat run is needed.
-
-</details>
-
-<details>
-<summary>Earlier lesson: controller architecture, installed packages and the reviewed PATH failure</summary>
-
-## Understand the roles first
-
-A controller hosts cloud-management services: authentication, APIs, scheduling, cloud records, and service messaging. Compute hosts run QEMU/KVM instances. The volume host supplies persistent disks. A host can perform several roles; controller count does not determine storage replication.
-
-Initial allocation: node1/node2/node3 are controllers and network nodes; node2/node3 are computes; node3 is the proposed single LVM volume host. Glance uses one local file store on node1. This keeps the selected three-controller design without pretending that every storage component is highly available.
-
-```mermaid
-flowchart TD
-    U["Horizon / Terraform / OpenStack CLI"] --> V["API VIP: 192.168.0.100"]
-    V --> A["Controller node1"]
-    V --> B["Controller node2"]
-    V --> C["Controller node3"]
-    A --- Q["Three-member MariaDB / RabbitMQ clusters"]
-    B --- Q
-    C --- Q
-    Q --> X["nova-compute: node2 and node3"]
-    X --> Y["libvirt → QEMU/KVM → VM"]
-    Y <-->|"Disk data over iSCSI"| S["node3: target → LVM → disk"]
-```
-
-Quorum protects agreement on control state. It does not recover a lost local disk. Two healthy connected members form a majority of three; losing two can stop quorum-dependent operations. Glance uploads/downloads still depend on node1, and Cinder disk access still depends on node3.
-
-## 1. Freeze the toolchain without changing the old project
-
-### What actually installed on Hermes
-
-**Purpose of this step:** equip Hermes to run later infrastructure tasks. Think of installing PowerCLI on a management VM: the tools live on the management computer. Installation alone does not create the infrastructure they will manage.
-
-Your report started at `2026-10-21T19:47:23Z`. It confirms a **partial setup**, with these completed changes:
-
-| Installed or changed | Plain purpose | Location / observed version |
-|---|---|---|
-| Project Python environment | A separate directory containing this project's Python and packages; it is not a VM or container | `/home/joe/venvs/kolla-iac` |
-| `pip` | Downloads and installs Python packages into that environment | Updated from 24.0 to **26.2.2** inside the environment |
-| `ansible-core` | Reads YAML playbooks/roles and runs their tasks on selected machines, usually over SSH | **2.20.10**, inside the environment |
-| `kolla-ansible` | Provides the playbooks and command used later to install OpenStack services in containers | **22.2.1.dev24**, from pinned commit `15ce36696a21356eb59abb4473e210f13cf7c98c` |
-| `python-openstackclient` | Provides the `openstack` command for later API operations such as creating networks, VMs and volumes | **10.4.0**, inside the environment |
-| `PyYAML` | Lets our Python scripts read YAML configuration files | **6.0.3**, inside the environment |
-| Supporting Python libraries | Building blocks for the above tools: API requests, authentication, templates and cryptography | Includes `openstacksdk` **4.21.0**, Jinja2, requests and other dependencies |
-| Ubuntu `ca-certificates` | Updates the system's trusted HTTPS certificate authorities | Upgraded to **20260816ubuntu0.24.04.1** on Hermes |
-
-**What was already there?** Git, curl, Python development/venv packages, GCC and the listed development libraries were already at the requested versions. APT reports **1 upgraded, 0 newly installed, 0 removed and 69 not upgraded**. It refreshed package indexes; it did not perform a full system upgrade. Repository lines mentioning Docker or HashiCorp are index checks, not evidence of installing Docker or Terraform in this run.
-
-**Why so many package names?** Pip automatically installs dependencies. For example, the OpenStack client uses `openstacksdk` and authentication libraries; Kolla/Ansible use YAML and template libraries. A client library named after an OpenStack service does not install that service's server. The terminal transcript is a dependency/download log, not a new list of cloud services.
-
-### Why the setup stopped
-
-| Phase | Observed outcome |
-|---|---|
-| Check/install Ubuntu prerequisites | Completed; only the certificate package was upgraded |
-| Create/use the project environment and install Python tools | Completed; the log says `Successfully installed ...` |
-| Kolla's Ansible Galaxy collection installation | **Stopped:** `[Errno 2] No such file or directory: 'ansible-galaxy'` |
-| Project collection installation, Python version report and doctor | Not reached in this run |
-
-**The script defect:** it called Kolla by its full path, but had not added `~/venvs/kolla-iac/bin` to **PATH**. PATH is the list of directories searched when a program calls another command by name. Kolla's dependency installer calls `ansible-galaxy` by name, so it could not locate the new environment's command. The wrapper added that PATH entry only after bootstrap, which was too late.
-
-The [bootstrap script](../scripts/bootstrap-hermes.sh) now exports the environment's `bin` directory before `kolla-ansible install-deps`. This fixes the command-search ordering. It does not mean that the repair has already run on Hermes or that collection installation is complete. [The selected Kolla source](https://github.com/openstack/kolla-ansible/blob/15ce36696a21356eb59abb4473e210f13cf7c98c/kolla_ansible/utils.py) shows the child `ansible-galaxy` call.
-
-**Scope of this run:** it installed/updated software on Hermes. The script did not SSH to node1/node2/node3, change their networking or disks, install cloud services there, create VMs, or install Codex. Terraform was not installed by this script. No cluster deployment was attempted.
-
-**Outcome of that run:** Python tools installed; collections incomplete; doctor not run. The current recovery command is in [Resume collections on Hermes](#resume-collections-on-hermes).
+Historical cause: Kolla was called by its full path, but its child `ansible-galaxy` command could not be found because the new environment was missing from PATH. The script now puts the environment on PATH before invoking child commands. The later resume completed collection setup and tool discovery.
 
 ### Next run: prepare the tools on Hermes
 
-**Reference for the attempted preparation step.** The actual partial result and cause are recorded above. Node identity, old-Ceph cleanup and USB physical testing are complete. The remaining address-allocation details do not block installing tools on Hermes. This step installs software; it does not log into or configure the nodes.
-
-Think of Hermes as the management workstation. Ansible will apply host configuration, Kolla-Ansible will install OpenStack, and the OpenStack client will call its APIs. Installing those tools does not yet run those operations.
-
-| Part | What this step does | Why |
-|---|---|---|
-| Ubuntu packages on Hermes | Update package index; install Git, curl, certificates and Python build/venv dependencies | Build/install the Python deployment tools |
-| `~/venvs/kolla-iac` | Install the repository's selected Kolla commit, compatible Ansible constraint, OpenStack client and PyYAML | Give this project an isolated Python tool environment |
-| `build/collections` | Install Kolla's requirements and the project's Ansible collections | Supply the Ansible modules/roles used by later steps |
-| Version record | Save `pip freeze` in the private report directory | Record the exact Python versions that were actually installed |
-| Doctor | Print executable locations and any `MISSING` tools | Verify what Hermes can find before configuring nodes |
-
-The [preparation wrapper](../scripts/prepare-hermes.sh) calls the existing [bootstrap installer](../scripts/bootstrap-hermes.sh), records output, and runs doctor with the new environment on PATH. It requires the hostname `hermes` and an interactive terminal. Existing `~/venvs/kolla` and `/etc/kolla` are outside its targets. It does not install Codex or modify AI settings.
-
-<details>
-<summary>Original preparation command — reference, not a retry instruction</summary>
-
-The command used for the attempted installation was run from Hermes:
-
-```bash
-cd ~/git/openstack-iac-lab
-git pull --ff-only
-bash scripts/prepare-hermes.sh
-```
-
-Enter **Hermes's sudo password** when asked. Package download/installation may take several minutes. You do not need to activate a virtual environment first; the script uses the intended environment explicitly. It does not change the parent terminal's environment.
+This old anchor is retained for earlier links. **That preparation is complete.** Return to [the current Step 2](#2-review-one-deployment-configuration). The installer is [prepare-hermes.sh](../scripts/prepare-hermes.sh); its private summary is `build/hermes-tools-summary.txt`, with full log/history under `build/`.
 
 </details>
-
-| Result | Interpretation |
-|---|---|
-| `INSTALL: COMPLETED` | Package/bootstrap commands finished successfully |
-| `INSTALL: STOPPED` | Installation failed; read the first actual error before retrying |
-| Doctor paths under `~/venvs/kolla-iac/bin` for Ansible/Kolla/OpenStack | The selected project environment is being used |
-| `terraform: MISSING` | Terraform still needs installation before Stage 3; this script does not install it |
-| `RESULT: TOOLS_FOUND` | All doctor executables were found; this is not a deployment or API test |
-| `RESULT: REVIEW` | Read each missing executable or command error; do not run deployment phases yet |
-
-The latest combined report is **`build/hermes-tools-report.txt`**. Timestamped logs and `python-versions.txt` live in `build/hermes-tools-<timestamp>-<suffix>/`, with private file/directory permissions. Review the report's final doctor/result section together. No raw report belongs in public Git.
-
-**Validation status:** the uploaded report confirms the Python package installation and the PATH-related stop. The PATH correction has a local child-command lookup check and shell/source validation; the corrected dependency installation and doctor remain untested on Hermes. Final VIP/pool configuration, SSH keys for Ansible, disk-health review and node preparation remain later checkpoints.
-
-<details>
-<summary>Reference: individual installation commands and later configuration generation</summary>
-
-New-project input lives in private/lab.yml; `python scripts/labctl.py configure --hosts-only` generates build/inventory.yml, build/kolla-inventory.yml, and build/globals.yml. HCP/workload inputs can wait until Stage 3, when the full configure step generates Terraform settings too. The commands below explain the underlying installer and later configuration; do not run them in addition to the preparation script for this checkpoint.
-
-Run on Hermes. This guide selects OpenStack 2026.1 and the inspected Kolla stable/2026.1 commit `15ce36696a21356eb59abb4473e210f13cf7c98c`. The branch can move; the commit pin does not. Container tags and OS package repositories are separate moving inputs and must be recorded after deployment.
-
-```bash
-sudo apt install -y git python3-dev python3-venv libffi-dev gcc libssl-dev libdbus-glib-1-dev
-python3 -m venv ~/venvs/kolla-iac
-source ~/venvs/kolla-iac/bin/activate
-python -m pip install --upgrade pip
-python -m pip install 'ansible-core>=2.19,<2.20.99' 'kolla-ansible @ git+https://opendev.org/openstack/kolla-ansible@15ce36696a21356eb59abb4473e210f13cf7c98c' python-openstackclient PyYAML
-export ANSIBLE_COLLECTIONS_PATH="$PWD/build/collections"
-mkdir -p "$ANSIBLE_COLLECTIONS_PATH"
-kolla-ansible install-deps
-mkdir -p build
-python -m pip freeze > build/python-versions.txt
-ansible --version
-kolla-ansible --version
-```
-
-Keep `~/venvs/kolla` and `/etc/kolla` from the old project intact. Collections are also isolated under this project's ignored build/collections directory; ansible.cfg selects it when commands run from the project root. Set a fresh configuration directory in this terminal and repeat the export in any new terminal used for this project:
-
-```bash
-export LAB_CONFIG="$HOME/.config/kolla-iac-lab"
-install -d -m 0700 "$LAB_CONFIG"
-```
-
-Copy the selected release's default `globals.yml` and `passwords.yml` into that **empty** directory, using the package example path under `~/venvs/kolla-iac/share/kolla-ansible/etc_examples/kolla/`. Do not overwrite an existing new-cluster password file. Generate fresh passwords:
-
-```bash
-cp ~/venvs/kolla-iac/share/kolla-ansible/etc_examples/kolla/globals.yml "$LAB_CONFIG/globals.yml"
-cp ~/venvs/kolla-iac/share/kolla-ansible/etc_examples/kolla/passwords.yml "$LAB_CONFIG/passwords.yml"
-kolla-genpwd -p "$LAB_CONFIG/passwords.yml"
-chmod 600 "$LAB_CONFIG/passwords.yml"
-```
-
-Merge the reviewed values from `kolla/globals.yml.example` into the new globals file. Each command below passes `--configdir` explicitly. Old Ceph overrides and custom images are not inputs to this deployment.
-
-</details>
-
-</details>
-
-## 2. Prepare the host networking
-
-Use Stage 2's common and Netplan roles before deploying. The fresh two-NIC design puts the original .200/.201/.202 addresses directly on the verified management interfaces. The provider NIC `ext0` has no host IP and is reserved for Neutron/OVS.
-
-Fill each provider NIC's actual MAC in `ansible/inventory/host_vars/`. Supply verified DNS addresses in `group_vars/all.yml`. Keep only one active Netplan definition for each interface; review installer-generated files from the console before applying a replacement.
-
-The central-config workflow instead fills these inputs in private/lab.yml and generates build/inventory.yml. The candidate globals explicitly enables Neutron L3 agent HA; verify actual router HA/agent placement after creating a tenant network. Three network-agent processes alone are not a completed failover test.
-
-Reserve `192.168.0.100` for the API VIP and exclude it from router DHCP/floating-IP allocations. It is assigned by Keepalived, not configured permanently on all three hosts. Verify that no unrelated host uses it before deploying.
-
-## 3. Preserve Kolla's full inventory hierarchy
-
-A hand-written inventory with only `[control]` and `[compute]` can omit required service groups. Generate YAML from the exact installed release's complete sample:
-
-```bash
-python scripts/render-kolla-inventory.py ~/venvs/kolla-iac/share/kolla-ansible/ansible/inventory/multinode build/kolla-inventory.yml
-ansible-inventory -i build/kolla-inventory.yml --graph
-ansible -i build/kolla-inventory.yml control --list-hosts
-ansible -i build/kolla-inventory.yml cinder-volume --list-hosts
-ansible -i build/kolla-inventory.yml cinder-volume-lvm --list-hosts
-ansible -i build/kolla-inventory.yml glance --list-hosts
-```
-
-Expected membership: control = all three; compute = node2/node3; storage, cinder-volume, cinder-volume-lvm, tgtd = node3; glance/glance-api = node1. The generator deliberately aligns the Cinder parent group with its single backend to avoid declaring three backend writers while using only one LVM host. APIs and schedulers remain on all controllers. Inspect the generated graph before proceeding; it is a candidate, not a live result.
-
-Kolla's guide still flags multi-controller LVM issues. One volume host does not prove every such issue absent. Keep all prechecks enabled; validate attachment and data access from both computes. If a precheck fails, diagnose group membership, enabled backends, and release behavior instead of setting a skip flag.
-
-## 4. Prepare exactly one Cinder data disk
-
-This step is blocked until Stage 0's live disk identification and health review is complete. The dedicated disk must not contain the OS, an OS LVM physical volume, a mounted filesystem, swap, or data to retain. Old Ceph ownership must first be cleared through [Stage 0 Step 7](00-hermes-codex-and-node-reset.md#7-remove-the-recorded-old-ceph-allocations), then its actual result reviewed.
-
-On the selected storage node, create the `cinder-volumes` volume group on the approved dedicated disk. The `labctl --ask-become-pass storage` action uses `scripts/storage-target.py` to create this VG only on the configured blank disk after host/serial confirmation. It refuses existing Ceph ownership; cleanup is the separate Stage 0 action. Fill the reviewed node3 by-id path/serial in private/lab.yml first.
-
-After the approved provisioning, verify on node3:
-
-```bash
-sudo pvs -o pv_name,pv_size,vg_name
-sudo vgs cinder-volumes
-sudo lvs -a -o lv_name,vg_name,lv_size
-```
-
-Expected: one intended Cinder VG on the dedicated data disk, separate from the Ubuntu OS VG. Do not create matching independent VGs on all three hosts and call them replicated storage.
-
-## 5. Deploy in deliberate steps
-
-Run from the repository root on Hermes after the preceding checks:
-
-```bash
-kolla-ansible bootstrap-servers -i build/kolla-inventory.yml --configdir "$LAB_CONFIG"
-kolla-ansible prechecks -i build/kolla-inventory.yml --configdir "$LAB_CONFIG"
-kolla-ansible pull -i build/kolla-inventory.yml --configdir "$LAB_CONFIG"
-kolla-ansible deploy -i build/kolla-inventory.yml --configdir "$LAB_CONFIG"
-kolla-ansible post-deploy -i build/kolla-inventory.yml --configdir "$LAB_CONFIG"
-kolla-ansible check -i build/kolla-inventory.yml --configdir "$LAB_CONFIG"
-```
-
-If sudo requires a password, set `export ANSIBLE_BECOME_ASK_PASS=True` in this shell before the manual Kolla commands, or use labctl's `--ask-become-pass` option. The selected Kolla Python CLI does not expose the regular ansible-playbook flag directly. Do not put the password in the public inventory. Stop after a failing step; do not rerun all phases blindly.
-
-## 6. Create the initial cloud resources
-
-Load the admin credentials generated by post-deploy from the new configuration directory. If it provides `admin-openrc.sh`, source that file. If it provides `clouds.yaml`, use it through `OS_CLIENT_CONFIG_FILE` and the generated cloud name. Never print or commit either file.
-
-Verify APIs and the expected service counts:
-
-```bash
-openstack token issue -c expires -f value
-openstack compute service list
-openstack hypervisor list
-openstack network agent list
-openstack volume service list
-```
-
-Create the external network once, after recording a verified unused floating-IP range on 192.168.0.0/24. Exclude .1, .100, .200–.202, Hermes, router DHCP leases, and all other existing addresses. `FLOAT_START`, `FLOAT_END`, and `DNS_SERVER` below must be set from that review, not guessed:
-
-The OpenStack network name `public` does not make these RFC1918 addresses internet-public. The lab floating IPs are reachable from the appropriate LAN/routed clients. Internet publication would require a separate design.
-
-```bash
-: "${FLOAT_START:?Set the reviewed first floating IP}"
-: "${FLOAT_END:?Set the reviewed last floating IP}"
-: "${DNS_SERVER:?Set the verified DNS server}"
-openstack network create --external --share --provider-network-type flat --provider-physical-network physnet1 public
-openstack subnet create --network public --subnet-range 192.168.0.0/24 --allocation-pool start="$FLOAT_START",end="$FLOAT_END" --gateway 192.168.0.1 --no-dhcp --dns-nameserver "$DNS_SERVER" public-subnet
-```
-
-The gateway value is the preserved address plan and must already have been verified. Confirm Kolla's physical-network mapping is physnet1 before using this command. Do not recreate an existing network of the same name.
-
-Upload an official Ubuntu 24.04 cloud image after checksum verification; give it the lab name `ubuntu-24.04`. Create a small flavor named `lab.small` (2 vCPU, 2048 MiB RAM, 15 GiB root disk) only if the post-deployment available resources support it. Import the intended **public** SSH key as `lab-key`. Create a separate project/user or project-scoped application credential for the Terraform stages; avoid routine use of admin credentials.
-
-Use Stage 3's first VM for the network test. Create a 1 GiB disposable Cinder volume, attach it to a disposable VM on node2, write a checksum-tested file, detach cleanly, and attach it to a disposable VM on node3. Identify the new guest disk with `lsblk` before formatting it. Confirm the file/checksum persists. This is the required LVM integration gate, not just a green service list.
-
-## Finish line and recovery
-
-Record service counts, API reachability, VM floating-IP access, successful cross-compute volume access, actual image digests, and free memory. Test controller redundancy one host at a time later. Because node1 carries Glance and node3 carries LVM storage, their loss tests have additional consequences; first test losing node2 without workloads depending on it.
-
-If all controllers shut down together, consult the selected release's documented MariaDB recovery path. Do not reset RabbitMQ or delete databases as a routine recovery action. Storage failure is not repaired by adding more controllers.
-
-Expansion: retain these three controller addresses, add a verified new host to the compute group, bootstrap it, and use the release's add-host procedure. Moving Glance or Cinder to redundant storage later is a separate design/data-migration task.
 
 ## Sources
 
 - [Pinned Kolla source](https://github.com/openstack/kolla-ansible/tree/15ce36696a21356eb59abb4473e210f13cf7c98c)
-- [Quick start and compatible Ansible](https://docs.openstack.org/kolla-ansible/2026.1/user/quickstart.html)
-- [Multinode inventory and file-backed Glance](https://docs.openstack.org/kolla-ansible/2026.1/user/multinode.html)
-- [Cinder LVM and HA caveats](https://docs.openstack.org/kolla-ansible/2026.1/reference/storage/cinder-guide.html)
-- [Production architecture](https://docs.openstack.org/kolla-ansible/2026.1/admin/production-architecture-guide.html)
+- [Kolla quick start](https://docs.openstack.org/kolla-ansible/2026.1/user/quickstart.html)
+- [Multinode inventory](https://docs.openstack.org/kolla-ansible/2026.1/user/multinode.html)
+- [Cinder LVM caveats](https://docs.openstack.org/kolla-ansible/2026.1/reference/storage/cinder-guide.html)
+- [Netplan try](https://netplan.readthedocs.io/en/stable/netplan-try/)
 
-Next: [Stage 2](02-ansible-roles.md). Its host-preparation steps are a prerequisite for deployment above.
+Next after installation: [Stage 2 — understand the roles we used](02-ansible-roles.md).

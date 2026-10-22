@@ -1,13 +1,13 @@
 # Stage 0 — Understand and verify the three nodes
 
-**Current lesson:** [understand the Windows ping and external-address budget](#reviewed-windows-ping-and-address-budget). All three USB link tests passed. Joe confirms `.100` reserved and no static devices in `.150–.199`, explicitly offering `.150/.151/.152`. Final pool size and VIP binding remain open. [Hermes tool preparation](01-openstack-foundation.md#next-run-prepare-the-tools-on-hermes) can proceed independently.
+**Current route: [Stage 1 — Install OpenStack](01-openstack-foundation.md).** Node reinstall, old Ceph cleanup and USB physical link tests are complete. This chapter records those lessons. Use the offered `.150–.152` for the initial external pool; VIP `.100` binding remains the outstanding input. Stage 1 uses the existing node3 SATA health/cleanup evidence for its reuse review.
 
 | Step | Status |
 |---|---|
 | Reinstall Ubuntu, keep the original IPs | Completed |
 | Log in as `joe` and run discovery | Completed |
 | Collect storage information from all three nodes | Completed; results explained below |
-| Resolve diagnostic warnings and review disk reuse | Pending |
+| Storage follow-up | Node3 SATA snapshot reviewed for lab reuse; NVMe log-query warnings and node1 SATA count remain separate diagnostic items |
 | Clean the recorded SATA Ceph allocations | Completed on all three nodes; each post-check reports CLEANED |
 | Inspect two NIC paths | Report reviewed on all three; management UP, USB DOWN, DNS query succeeded |
 | Confirm switch/LAN and DHCP scope | Joe confirms shared switch, `192.168.0.0/24`, DHCP `.2–.149`; `.100` reservation needs clarification |
@@ -589,7 +589,7 @@ Joe confirms both NICs connect to the **same mini switch**, on **`192.168.0.0/24
 | `192.168.0.2–149` | Router DHCP pool | Confirmed by Joe |
 | `192.168.0.100` | Planned OpenStack API VIP | Joe reiterates it is reserved; reservation client/current lease still unspecified |
 | `192.168.0.150–152` | Three external addresses explicitly offered by Joe | Owner says free; enough for the first workload, smaller than the full coexistence budget |
-| `192.168.0.153–199` | Remaining addresses in the proposed wider pool | Joe reports no static users across `.150–.199`; final pool size remains to be chosen |
+| `192.168.0.153–199` | Remaining addresses in the proposed wider pool | Joe reports no static users across `.150–.199`; no wider allocation is needed for the first workload |
 | `192.168.0.200–202` | node1, node2, node3 management | Preserved; already in use |
 | `192.168.0.203–250` | No new allocation in this step | Outside reported DHCP; availability unknown |
 
@@ -604,7 +604,7 @@ flowchart TD
     S <--> U["USB NICs: no host IP"]
     M --> V["Future API VIP .100: one active owner"]
     U --> N["Future Neutron external network"]
-    N --> P["Proposed pool .150–.199: unverified"]
+    N --> P["Initial offered pool .150–.152"]
 ```
 
 The VIP is how clients reach OpenStack APIs. External allocation addresses are for Neutron router gateways and VM floating IPs. Neither is a new host address for `ext0`.
@@ -639,7 +639,7 @@ This is a budget calculated from `terraform/01-first-workload`, `02-application`
 
 **VIP fact to establish:** Joe has already answered that `.100` is reserved. The useful next detail is **which DHCP product/device manages that reservation**, so its client binding and current lease can be checked precisely. Do not keep asking whether it is reserved. Do not map the VIP to an invented controller MAC or assign it on all three nodes.
 
-**What can run now?** [Stage 1's Hermes-only tool preparation](01-openstack-foundation.md#next-run-prepare-the-tools-on-hermes). Installing deployment tools on Hermes does not require assigning a VIP or creating the external pool. Final private cloud configuration and node changes wait for their outstanding checks.
+**Initial scope:** use the three offered addresses for the first workload. Expanding the pool is a later capacity decision. Hermes tool preparation has already completed; continue at [Stage 1's current step](01-openstack-foundation.md#2-review-one-deployment-configuration). The VIP binding remains outstanding. Node3 SATA reuse is reviewed from the existing recorded health/cleanup evidence; this pool choice does not establish VIP ownership.
 
 <details>
 <summary>Completed-test reference: script behavior and command</summary>

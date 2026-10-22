@@ -4,7 +4,7 @@ Three controllers on Ubuntu 24.04, Cinder LVM, Ansible, Terraform, an applicatio
 
 **Current step: Stage 1 — check Ansible administrator access.** SSH login is complete. Next, verify that Ansible can use `sudo` as `joe` on all three nodes, using only identity reads. [Read the short lesson, diagram and one script command](docs/02-ansible-roles.md#check-ansible-administrator-access). No package installation is part of this check.
 
-**Latest observed result:** the SSH report starting `2026-10-22T06:33:11Z` ends with `RESULT: SSH_READY for all`. The new `~/.ssh/openstack-iac-lab-ansible` pair was created and loaded; each node received one public key, accepted a fresh key-only login as `joe`, and returned Ansible `pong`. Sudo policy is unchanged; this run did not test privilege escalation or deploy OpenStack. Hermes tools remain ready (`TOOLS_FOUND`).
+**Latest observed result:** the SSH summary starting `2026-10-22T09:45:00Z` again ends with `RESULT: SSH_READY for all`. The existing project key was loaded and verified; fresh key login and Ansible SSH/Python checks passed on all three nodes. Hermes tools are ready (`TOOLS_FOUND`). **Next: verify Ansible's sudo access.**
 
 **Confirmed by Joe:** same mini switch/LAN `192.168.0.0/24`, DHCP `.2–.149`, `.100` reserved, and no static devices in `.150–.199`. He explicitly offers `.150/.151/.152`; final pool size still needs a choice because all current workloads together need five external addresses. The `.100` DHCP binding/current lease remain unspecified. [Read the ping interpretation and IP budget](docs/00-hermes-codex-and-node-reset.md#reviewed-windows-ping-and-address-budget).
 

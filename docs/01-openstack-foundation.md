@@ -1,6 +1,6 @@
 # Stage 1 — Three controllers, two computes, one Cinder LVM host
 
-**Current checkpoint:** tools and SSH setup are complete. The report starting `2026-10-22T06:33:11Z` confirms `SSH_READY for all`. **Next: [check Ansible administrator access](02-ansible-roles.md#check-ansible-administrator-access)** before host configuration. The completed SSH lesson remains below.
+**Current checkpoint:** tools and SSH setup are complete. The latest summary, starting `2026-10-22T09:45:00Z`, confirms `SSH_READY for all` again. **Next: [check Ansible administrator access](02-ansible-roles.md#check-ansible-administrator-access)** before host configuration. The completed SSH lesson remains below.
 
 ## SSH access for Ansible
 
@@ -91,6 +91,8 @@ The Ansible `ping` test uses SSH and Python, rather than ICMP. Its `changed: fal
 | node1 | `192.168.0.200` | Passed as `joe` | `pong` |
 | node2 | `192.168.0.201` | Passed as `joe` | `pong` |
 | node3 | `192.168.0.202` | Passed as `joe` | `pong` |
+
+**Later confirmation:** the summary starting `2026-10-22T09:45:00Z` again reports `SSH_READY for all`, using the same key fingerprint. Key loading, public-key installation, fresh logins and the Ansible SSH/Python test completed. **SSH setup is complete; the next report to review is `build/admin-access-summary.txt`.**
 
 **Checkpoint complete:** Hermes can reach all three as `joe` using the selected key, and Ansible can execute Python. This step installed no node packages and changed no network, disk or sudo policy. It did not test Ansible privilege escalation or deploy OpenStack. No repeat SSH setup is needed; host configuration follows review of its remaining inputs.
 

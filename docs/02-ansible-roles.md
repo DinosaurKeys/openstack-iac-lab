@@ -4,6 +4,8 @@
 
 ## Check Ansible administrator access
 
+**Current result:** node1 and node3 passed; node2's sudo password was rejected. [Review the result and retry node2 only](#reviewed-result-node2-sudo-password). The all-node command below explains the completed first check.
+
 **Stage 1 host preparation, using this stage's Ansible files.** SSH already lets Hermes log in as `joe`. Installing packages and configuring system services later require administrator privileges. This check proves that Ansible can use `sudo` before we apply the common role.
 
 **The new word is `become`:** Ansible logs in as `joe`, then uses `sudo` to run the selected task as `root`. Linux identifies root with user ID **`0`**.
@@ -53,7 +55,46 @@ The summary prints at the end and is saved as **`build/admin-access-summary.txt`
 
 An ordinary node failure is recorded and the read-only checks continue to the other selected nodes. Cancelling stops later checks. `--node node2` selects only that node for a targeted check when needed.
 
-**Stop here and share the short summary.** A pass proves Ansible's sudo access; it does not install packages or change sudo policy. The next lesson will explain the common role's packages and proposed changes before applying it. Local fixture checks pass; the actual lab result for this new check is pending.
+**Review the short summary before host configuration.** A pass proves Ansible's sudo access. The next lesson will explain the common role's packages and proposed changes before applying it. The first live result is recorded below.
+
+### Reviewed result: node2 sudo password
+
+Report start: **`2026-10-22T10:04:51Z`**. Final result: **`REVIEW`**.
+
+| Node | Preserved address | Observed result | Meaning |
+|---|---|---|---|
+| node1 | `192.168.0.200` | `ADMIN_OK`; UID `0`; hostname matched | Ansible used sudo successfully |
+| node2 | `192.168.0.201` | `Incorrect sudo password` | SSH reached the node; sudo rejected the password before the identity commands ran |
+| node3 | `192.168.0.202` | `ADMIN_OK`; UID `0`; hostname matched | Ansible used sudo successfully |
+
+**Cause → effect:** node2 rejected the supplied sudo password, so its first task failed. The independent read-only checks continued to node3 as designed. The final `REVIEW` means the administrator-access checkpoint is incomplete. All nodes report `changed=0`; no host configuration was applied.
+
+The log does not establish whether the password was mistyped or a different credential was entered. At `BECOME password:`, use **node2's Ubuntu `joe` account password**. Typing stays hidden.
+
+**Retry on Hermes, from `~/git/openstack-iac-lab`:**
+
+```bash
+git pull --ff-only
+bash scripts/check-admin.sh joe --node node2
+```
+
+This runs the same identity reads on node2 only. The expected final line is:
+
+```text
+RESULT: ADMIN_ACCESS_OK for node2; identity checks passed.
+```
+
+**Share the printed summary.** It is also saved to `build/admin-access-summary.txt`. The latest report files will describe this node2-only run; the earlier all-node report remains in timestamped history. We will review the new result alongside the recorded node1/node3 passes before applying the common role. If sudo rejects the password again, share the error text so we can investigate node2's local sudo authentication.
+
+<details>
+<summary>Two error details explained</summary>
+
+| Output | Meaning |
+|---|---|
+| `Origin: .../check-admin.yml:9:7` | Location of the failed task in the YAML file; the reported failure is sudo authentication |
+| `ansible_exit=2; log_exit=0` | Ansible reported failure; the command saving its output succeeded |
+
+</details>
 
 Source: [Ansible become and sudo-password prompts](https://docs.ansible.com/projects/ansible-core/devel/playbook_guide/playbooks_privilege_escalation.html).
 

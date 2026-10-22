@@ -2,9 +2,9 @@
 
 Three controllers on Ubuntu 24.04, Cinder LVM, Ansible, Terraform, an application, and monitoring.
 
-**Current step: Stage 1 — check Ansible administrator access.** SSH login is complete. Next, verify that Ansible can use `sudo` as `joe` on all three nodes, using only identity reads. [Read the short lesson, diagram and one script command](docs/02-ansible-roles.md#check-ansible-administrator-access). No package installation is part of this check.
+**Current step: Stage 1 — finish node2's administrator-access check.** Node1 and node3 passed. Node2 reached sudo, which rejected the entered password. [Read the reviewed result and node2-only retry](docs/02-ansible-roles.md#reviewed-result-node2-sudo-password). This check only reads identity; package installation comes later.
 
-**Latest observed result:** the SSH summary starting `2026-10-22T09:45:00Z` again ends with `RESULT: SSH_READY for all`. The existing project key was loaded and verified; fresh key login and Ansible SSH/Python checks passed on all three nodes. Hermes tools are ready (`TOOLS_FOUND`). **Next: verify Ansible's sudo access.**
+**Latest observed result:** the administrator-access report starting `2026-10-22T10:04:51Z` ends with `RESULT: REVIEW`. Node1 and node3 verified root UID `0` and the expected hostname. Node2 reports `Incorrect sudo password`. SSH and Hermes tools remain ready; host configuration waits for node2's result.
 
 **Confirmed by Joe:** same mini switch/LAN `192.168.0.0/24`, DHCP `.2–.149`, `.100` reserved, and no static devices in `.150–.199`. He explicitly offers `.150/.151/.152`; final pool size still needs a choice because all current workloads together need five external addresses. The `.100` DHCP binding/current lease remain unspecified. [Read the ping interpretation and IP budget](docs/00-hermes-codex-and-node-reset.md#reviewed-windows-ping-and-address-budget).
 
@@ -45,7 +45,7 @@ Follow this table **from top to bottom**, reviewing the result at each stop. Com
 | 3 · Stage 0 — **links done; allocation details pending** | Record no static users in `.150–.199`; settle pool size and `.100` DHCP binding | Three external IPs are smaller than the five-address coexistence budget | No repeat ping/link test; final cloud inputs wait for the outstanding facts |
 | 4 · Stage 1 — **done** | Resume collections completed; short summary reviewed | Finish collection installation and verify Python dependencies/tool locations | All phases COMPLETED; RESULT TOOLS_FOUND |
 | 5 · Stages 1 + 2 — **SSH done** | One public key added per node; fresh key login and Ansible Python checks passed | Let Ansible connect as `joe` using Hermes's selected private key | SSH_READY for all observed; host preparation follows input review |
-| 5a · Stage 1 — **current** | `check-admin.sh joe --node all` | Verify Ansible sudo access with `id -u` and the expected hostname, using a separate password prompt per node | Review the short summary; require ADMIN_ACCESS_OK for all |
+| 5a · Stage 1 — **current** | `check-admin.sh joe --node node2` | Retry node2 after its sudo-password rejection; node1/node3 already passed | Require ADMIN_ACCESS_OK for node2, then review alongside the earlier passes |
 | 5b · Stages 1 + 2 — later | Review the common role, its package list and preview before applying it | Prepare host packages, names and time synchronization | Reviewed changes and repeatable common-role result |
 | 6 · Stages 1 + 2 | `labctl netplan`, then the console procedure in Stage 2, one node at a time | Bind each USB MAC to `ext0` and retain the original management address | SSH, DNS, default route and provider link checked |
 | 7 · Stage 1 | `labctl --ask-become-pass storage` | Create **one** `cinder-volumes` VG on the reviewed blank node3 SATA disk | node3 SATA owns Cinder; Ubuntu VG stays separate |
@@ -103,7 +103,7 @@ For `first`, `app` or `monitor`, run `python scripts/labctl.py terraform NAME AC
 | Reviewed node3 disk reuse and unresolved diagnostic limitations | Deleting Ceph does not repair hardware or resolve a failed NVMe log query |
 | Non-overlapping tenant CIDRs, HCP organization/workspaces and scoped cloud credentials | These depend on your network and accounts |
 
-**Current checkpoint: row 5a, administrator-access check.** Follow the [sudo lesson](docs/02-ansible-roles.md#check-ansible-administrator-access), run its one wrapper on Hermes, and share `build/admin-access-summary.txt`. The tracked preparation inventory is sufficient for these identity reads; later network/storage/cloud configuration still needs its reviewed inputs.
+**Current checkpoint: row 5a, node2 administrator access.** Follow the [reviewed result and retry](docs/02-ansible-roles.md#reviewed-result-node2-sudo-password), run the existing wrapper for node2 only, and share its printed summary. The tracked preparation inventory is sufficient for these identity reads; later network/storage/cloud configuration still needs its reviewed inputs.
 
 <details>
 <summary>Reference: first checkout and initial discovery</summary>

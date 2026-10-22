@@ -1,6 +1,6 @@
 # Stage 1 — Three controllers, two computes, one Cinder LVM host
 
-**Current checkpoint:** tools and SSH setup are complete. The latest summary, starting `2026-10-22T09:45:00Z`, confirms `SSH_READY for all` again. **Next: [check Ansible administrator access](02-ansible-roles.md#check-ansible-administrator-access)** before host configuration. The completed SSH lesson remains below.
+**Current checkpoint:** tools and SSH setup are complete. The administrator-access report starting `2026-10-22T10:04:51Z` confirms root access on node1 and node3. Node2 reports `Incorrect sudo password`. **Next: [review and retry node2 only](02-ansible-roles.md#reviewed-result-node2-sudo-password)** before host configuration. The completed SSH lesson remains below.
 
 ## SSH access for Ansible
 
@@ -92,7 +92,7 @@ The Ansible `ping` test uses SSH and Python, rather than ICMP. Its `changed: fal
 | node2 | `192.168.0.201` | Passed as `joe` | `pong` |
 | node3 | `192.168.0.202` | Passed as `joe` | `pong` |
 
-**Later confirmation:** the summary starting `2026-10-22T09:45:00Z` again reports `SSH_READY for all`, using the same key fingerprint. Key loading, public-key installation, fresh logins and the Ansible SSH/Python test completed. **SSH setup is complete; the next report to review is `build/admin-access-summary.txt`.**
+**Later confirmation:** the summary starting `2026-10-22T09:45:00Z` again reports `SSH_READY for all`, using the same key fingerprint. Key loading, public-key installation, fresh logins and the Ansible SSH/Python test completed. The subsequent administrator-access check passed on node1/node3; [node2's sudo-password rejection is the current checkpoint](02-ansible-roles.md#reviewed-result-node2-sudo-password).
 
 **Checkpoint complete:** Hermes can reach all three as `joe` using the selected key, and Ansible can execute Python. This step installed no node packages and changed no network, disk or sudo policy. It did not test Ansible privilege escalation or deploy OpenStack. No repeat SSH setup is needed; host configuration follows review of its remaining inputs.
 

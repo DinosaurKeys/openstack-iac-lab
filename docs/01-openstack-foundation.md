@@ -1,99 +1,105 @@
 # Stage 1 — Three controllers, two computes, one Cinder LVM host
 
-**Current checkpoint:** Hermes tools are ready, but the old client key's passphrase is unknown. [Create a new project key with the existing all-node script](#recover-access-with-a-new-project-key). The old pair stays intact; no repeat tool installation is needed.
+**Current checkpoint:** SSH setup passed on all three nodes: `RESULT: SSH_READY for all` from the report starting `2026-10-22T06:33:11Z`. [Learn how the keys and Ansible fit together](#the-idea-hermes-proves-its-identity). Tool installation and SSH setup are complete.
 
 ## SSH access for Ansible
 
-**Stage 1 — connect the deployment computer to the nodes.** Password SSH worked during discovery. Ansible needs a repeatable login method. This step installs one dedicated public key, then tests key login and remote Python on all three nodes.
+### The idea: Hermes proves its identity
+
+**One key pair, two files.** Think of a private signing stamp kept on Hermes and a public verification record kept on the nodes. SSH proves that Hermes has the matching private key. Ansible uses that SSH connection to run its tasks.
+
+| File / location | What it does |
+|---|---|
+| Hermes: `~/.ssh/openstack-iac-lab-ansible` | Private key; stays on Hermes and proves its identity |
+| Hermes: `~/.ssh/openstack-iac-lab-ansible.pub` | Public half of the same pair; this is the part copied to the nodes |
+| Each node: `/home/joe/.ssh/authorized_keys` | Contains the public keys allowed to log in as `joe` |
+
+**During setup**, `ssh-copy-id` adds the public half to each node's allowed-key list. You used the node's account password to authorize that addition. **During later login**, SSH uses the private key on Hermes to sign a login request; the node verifies it with the listed public key. The private key is not sent to the node.
+
+```mermaid
+flowchart TD
+    subgraph H["Hermes"]
+        A["Ansible"] --> C["SSH client"]
+        K["Private key"] -->|"Used to sign"| C
+    end
+    subgraph N["Each node"]
+        P["joe's public-key list"] -->|"Used to verify"| V["SSH server"]
+        V --> J["Run task as joe"]
+    end
+    C -->|"Signed login request"| V
+    J -->|"Task result"| A
+```
+
+The diagram applies to **all three nodes**: node1 `192.168.0.200`, node2 `192.168.0.201`, node3 `192.168.0.202`. The same public key was added once to each node. Ansible runs on Hermes and uses the matching private key through SSH.
+
+### Password and passphrase: different jobs
+
+| Item | Purpose |
+|---|---|
+| Node's Ubuntu `joe` password | Logs into that node with password authentication; used when installing the public key |
+| Optional SSH key passphrase | Protects the private-key file on Hermes; chosen when creating that file |
+| Sudo authorization | Allows administrative tasks after login; SSH key access does not automatically grant root privileges |
+
+“SSH without a password” here means **without typing the node's login password for each connection**. A protected private key can still ask for its own local passphrase until an agent holds it ready.
+
+### Why pressing Enter worked in the previous lab
+
+**Yes: an empty passphrase is allowed during key creation.** The command and the prompt determine what Enter means:
+
+| Prompt | Pressing Enter without typing means |
+|---|---|
+| `ssh-keygen`: `Enter passphrase (empty for no passphrase):` | Create the new key without passphrase protection; confirm the empty choice at the next prompt |
+| `ssh-add`: `Enter passphrase for ...:` | Stop trying to unlock that existing protected key |
+
+A key created without a passphrase still supports SSH key authentication. Its private file has no passphrase protection; the SSH connection itself is still encrypted. The previous guide should have explained this choice before discussing a forgotten passphrase.
+
+**Your current log:** `Identity added` appears without a displayed unlocking prompt. That is consistent with choosing an empty passphrase, but the pasted output does not record your typed input or establish the file's encryption setting. The successful SSH tests do not depend on us guessing that setting.
+
+### Why we replaced the old key
+
+The earlier `~/.ssh/openstack-iac-lab` key asked for a passphrase, and you did not remember it. OpenSSH cannot recover a forgotten key passphrase. We used the new name `~/.ssh/openstack-iac-lab-ansible` and registered its public key on the nodes; the script leaves the original pair intact.
+
+Here, **recovery meant replacing a forgotten login credential on Hermes**. It was not an Ubuntu reinstall or an OpenStack rebuild. This is completed troubleshooting; the main lesson is the key pair and SSH flow above.
+
+### What your four commands did
+
+| Command | Effect in this run |
+|---|---|
+| `git pull --ff-only` | Updated the repository on Hermes from `613507a` to `8c6d9ec`, including the script, inventories and lessons |
+| `eval "$(ssh-agent -s)"` | Started the local key helper and connected this terminal to it; `Agent pid 23384` identifies that process |
+| `bash scripts/prepare-ssh.sh joe --node all --apply` | Created the new pair, loaded it, added its public key to all three nodes, then tested SSH and Ansible Python execution |
+| `cat build/ssh-access-summary.txt` | Displayed the saved summary; it did not repeat setup |
+
+**What is the agent?** A helper on Hermes that keeps a key ready to sign SSH requests. For a protected key, that avoids repeated passphrase entry. Your script loaded it with a **14,400-second / four-hour agent lifetime**. That timer applies to the agent's copy; it does not expire the key file or remove public keys from the nodes. A key without a passphrase can also be read directly from its file by SSH.
+
+### Read your successful result
+
+Your report began at `2026-10-22T06:33:11Z` and ended with **`RESULT: SSH_READY for all`**.
+
+| Output | Plain meaning |
+|---|---|
+| `Identity added` | The agent accepted the selected key on Hermes |
+| Fingerprint / randomart | Recognition labels for the key; these are not the private-key file contents |
+| `Number of key(s) added: 1` on each node | One public-key entry was installed for `joe` on that node |
+| `KEY_LOGIN_OK` on each node | A fresh key-only SSH login worked, with expected hostname, account and management address |
+| Ansible `SUCCESS`, `ping: pong`, `changed: false` | Ansible logged in and ran a small Python test successfully; that test needed no configuration change |
+
+The Ansible `ping` test uses SSH and Python, rather than ICMP. Its `changed: false` describes the test; the earlier public-key installation did change the nodes' allowed-key files.
+
+| Node | Preserved address | Key login | Ansible Python test |
+|---|---|---|---|
+| node1 | `192.168.0.200` | Passed as `joe` | `pong` |
+| node2 | `192.168.0.201` | Passed as `joe` | `pong` |
+| node3 | `192.168.0.202` | Passed as `joe` | `pong` |
+
+**Checkpoint complete:** Hermes can reach all three as `joe` using the selected key, and Ansible can execute Python. This step installed no node packages and changed no network, disk or sudo policy. It did not test Ansible privilege escalation or deploy OpenStack. No repeat SSH setup is needed; host configuration follows review of its remaining inputs.
+
+<details>
+<summary>Completed setup and troubleshooting reference</summary>
 
 ### Recover access with a new project key
 
-**Reviewed result:** you do not remember the existing SSH key's passphrase. You tried the Ubuntu account password and pressed Enter. These are separate credentials: the key passphrase protects a file on Hermes; the account password logs into Ubuntu.
-
-A forgotten key passphrase cannot be recovered by OpenSSH. The recovery is a new key pair and installation of its public key. Source: [OpenSSH key-passphrase recovery](https://man.openbsd.org/ssh-keygen).
-
-| Key files on Hermes | Recovery action |
-|---|---|
-| `~/.ssh/openstack-iac-lab` and `.pub` | Retained at their existing names; no deletion, overwrite or passphrase guessing |
-| `~/.ssh/openstack-iac-lab-ansible` and `.pub` | Create if absent; reuse if already complete. This is now the key selected by the script and host/Kolla inventories |
-
-**What the script does:** create the new pair on Hermes, load its private key into the agent for four hours, install only its public key as `joe` on node1 `.200`, node2 `.201` and node3 `.202`, then test fresh key-only SSH and Ansible Python `ping` on all three. It installs no packages and makes no network, disk or sudo-policy changes.
-
-**Run this block on Hermes from `~/git/openstack-iac-lab`:**
-
-```bash
-git pull --ff-only
-eval "$(ssh-agent -s)"
-bash scripts/prepare-ssh.sh joe --node all --apply
-cat build/ssh-access-summary.txt
-```
-
-`git pull` gets the corrected script and inventories. `eval` starts an agent connected to this terminal; keep using this terminal for Ansible. The script handles all three nodes. `cat` displays its short result.
-
-**Read this prompt table before running:**
-
-| Prompt | What to enter |
-|---|---|
-| `Enter passphrase (empty for no passphrase):` | Choose a **new key passphrase** and save it in your password manager |
-| `Enter same passphrase again:` | Repeat that new key passphrase |
-| `Enter passphrase for ...openstack-iac-lab-ansible:` | Enter the **same new key passphrase** a third time; this loads the key into the agent |
-| `joe@192.168.0.200/201/202's password:` | Enter that node's Ubuntu `joe` login password when requested |
-
-Characters stay hidden while typing. The new-key creation prompts appear only if the new pair does not already exist. Pressing Enter alone at the **key-loading** prompt cancels it. A later retry reuses the new pair; enter the passphrase chosen for that pair.
-
-| Summary result | Meaning |
-|---|---|
-| `Project key: /home/joe/.ssh/openstack-iac-lab-ansible` | The script selected the new filename |
-| `RESULT: SSH_READY for all` | Key login, host identity/address checks and Ansible Python ping passed on all three |
-| `STOP` | Review the named phase and exit codes; later steps were not attempted |
-
-**Checkpoint:** share `build/ssh-access-summary.txt` before host configuration. This recovery has local fixture checks; its live lab result is pending. No node reinstall is required for an unknown client-key passphrase.
-
-<details>
-<summary>Reviewed history: why the previous key-loading attempt stopped</summary>
-
-### Current SSH stop: key created, unlock failed
-
-- The original summary started at `2026-10-21T21:09:40Z`: key creation completed, then loading stopped before any node-copy, login or Ansible phase.
-- The saved unlock section contained only its heading and `STOP`. The original generic sentence about earlier public-key additions did not establish that any copy occurred.
-- A direct `ssh-add -v -t 4h ~/.ssh/openstack-iac-lab` displayed one passphrase prompt, then exit `1`. The script's logging pipeline was not involved in that check.
-- OpenSSH has a quiet failure path for an empty response, including some input-read failures. A wrong non-empty passphrase normally prompts another attempt. The output alone did not identify what was entered.
-- Joe subsequently confirmed that he does not remember the key passphrase and had tried the account password/Enter. The active recovery above uses a new filename and preserves the original pair.
-
-The script now records the failed command's `command_exit` separately from the logging command's `log_exit`, and states whether public-key installation was attempted. Sources: [ssh-add exit status](https://man.openbsd.org/ssh-add), [reviewed 9.6 key-loading code](https://github.com/openssh/openssh-portable/blob/V_9_6_P1/ssh-add.c#L300-L327), [input handling](https://github.com/openssh/openssh-portable/blob/V_9_6_P1/readpass.c#L123-L201).
-
-</details>
-
-### Understand the three parts
-
-| Part | Where it lives | Purpose |
-|---|---|---|
-| Private key: `~/.ssh/openstack-iac-lab-ansible` | Hermes only | Proves Hermes has the matching key; never copy or commit this file |
-| Public key: `~/.ssh/openstack-iac-lab-ansible.pub` | Hermes; copied into `joe`'s `~/.ssh/authorized_keys` on each node | Allows that key to log in as `joe` |
-| `ssh-agent` | Running on Hermes | Holds the unlocked key for up to four hours so SSH/Ansible can use it without repeating its passphrase |
-
-The **key passphrase** protects the private-key file. The **node password** authorizes its public-key installation. **Sudo** is a separate permission: later root tasks will still ask for the sudo password.
-
-This client login key is separate from the nodes' server host keys verified earlier. Host-key checking stays enabled.
-
-### What the script changes and checks
-
-The [SSH script](../scripts/prepare-ssh.sh) uses the same procedure for node1 `.200`, node2 `.201`, node3 `.202`:
-
-| Action | Effect |
-|---|---|
-| Create/reuse the dedicated key | Asks for a passphrase when creating it; refuses incomplete/symlinked key files and does not overwrite existing keys |
-| Unlock it with `ssh-add` | Loads the key into the agent for four hours; checks that the public key is usable |
-| Run `ssh-copy-id` | Adds only that public key to `joe`'s account; existing authorized keys remain |
-| Open a fresh SSH connection | Uses the dedicated key with password fallback disabled; checks hostname, login user and preserved management IP |
-| Run Ansible `ping` | Uses a small generated inventory with sudo disabled; checks SSH and remote Python, expecting `pong` |
-
-Ansible `ping` is not an ICMP/network ping. It runs a small Python module and may create/clean temporary module files under `joe`'s account. This step installs no node packages and changes no network, disk, sudo or SSH-server policy.
-
-<details>
-<summary>General setup reference — the active recovery above uses the new filename</summary>
-
-### Initial setup on Hermes
+This command block is the completed run recorded above. The [script](../scripts/prepare-ssh.sh) creates a missing pair, reuses a complete pair and refuses incomplete/symlinked key files. It adds only the selected public key and keeps host-key checks enabled. Its SSH-only test inventory disables sudo. VM workload keys are a separate later input.
 
 ```bash
 cd ~/git/openstack-iac-lab
@@ -103,42 +109,23 @@ bash scripts/prepare-ssh.sh joe --node all --apply
 cat build/ssh-access-summary.txt
 ```
 
-**Prompts:** choose a key passphrase twice when creating the key, then enter it again when unlocking it. Enter each node's `joe` login password if `ssh-copy-id` requests it. Passwords/passphrases do not display while typing. There is no sudo prompt in this step.
+### Current SSH stop: key created, unlock failed
 
-The `eval` line starts an agent and connects **this terminal** to it. Keep this terminal for the next Ansible step. The final `cat` only displays the summary.
+Historical stop, now resolved with the new key: the original report started at `2026-10-21T21:09:40Z`. Key creation completed, but loading stopped before any node-copy phase. A direct load later reached a passphrase prompt and exited `1`; you then reported not remembering the old passphrase. The original pair was not deleted or overwritten by the recovery script.
 
-| Output | Meaning |
-|---|---|
-| `KEY_LOGIN_OK` | That node accepted a fresh key-only login and matched its expected identity/address |
-| Ansible `SUCCESS` and `"ping": "pong"` | SSH and remote Python worked |
-| `RESULT: SSH_READY for all` | All selected-node checks passed |
-| `STOP` | Read the failed phase; later nodes/steps were not attempted. Keys installed during earlier completed phases are not rolled back |
-| `command_exit=...; log_exit=...` | Updated failure reports distinguish the command result from the `tee` log result; `0` means success for that command |
+The script now records `command_exit` and `log_exit` separately when a phase fails, and says whether public-key installation was attempted. It stops before later steps; completed public-key additions are retained.
 
-Latest summary: **`build/ssh-access-summary.txt`**. Full log: `build/ssh-access-report.txt`. The key stays outside Git; reports and the test inventory are in ignored, private `build/` files.
+Latest private reports: `build/ssh-access-summary.txt` and `build/ssh-access-report.txt`. Timestamped history stays under ignored `build/`. The private key stays outside the repository under Hermes's `.ssh` directory.
 
-**Checkpoint:** the old key's passphrase is unknown. The active recovery uses `~/.ssh/openstack-iac-lab-ansible`, leaving the old pair intact. No `SSH_READY` result has been observed. Tracked/generated host inventories select the new key; workload VM keys remain a separate later input.
+**Later use:** a different terminal must have the right agent environment if it is to use that agent. A protected key needs its passphrase when loaded into a new agent or after its agent copy expires. An unprotected key has no passphrase prompt. Neither case requires regenerating or reinstalling the key merely because four hours elapsed.
 
-</details>
+Sources:
 
-<details>
-<summary>Later verification, agent lifetime and references</summary>
-
-`--node node2` selects one node for a targeted retry. Without `--apply`, the script unlocks the existing key and repeats verification without creating a key or installing a public key. It never removes old host-key entries or disables host-key checking. An unknown/changed server key needs its own console fingerprint review.
-
-After four hours, or from a new terminal, start an agent and unlock the existing key before Ansible:
-
-```bash
-eval "$(ssh-agent -s)"
-ssh-add -t 4h ~/.ssh/openstack-iac-lab-ansible
-```
-
-That does not create another key or reinstall it on nodes. The passphrase is still needed to unlock the file; only the agent's unlocked copy expires. Existing unrelated keys/agents are not deleted by this script.
-
-- [OpenSSH ssh-agent](https://man.openbsd.org/ssh-agent)
-- [OpenSSH ssh-add and key lifetime](https://man.openbsd.org/ssh-add)
-- [ssh-copy-id: selected public key and authorized_keys](https://manpages.debian.org/bookworm/openssh-client/ssh-copy-id.1.en.html)
-- [Ansible ping: SSH and usable Python](https://docs.ansible.com/ansible/latest/collections/ansible/builtin/ping_module.html)
+- [OpenSSH key creation, optional passphrases and forgotten-passphrase handling](https://man.openbsd.org/ssh-keygen)
+- [SSH server authentication and authorized_keys](https://man.openbsd.org/sshd)
+- [OpenSSH agent key loading and lifetime](https://man.openbsd.org/ssh-add)
+- [OpenSSH 9.6 empty input during key loading](https://github.com/openssh/openssh-portable/blob/V_9_6_P1/ssh-add.c#L300-L327)
+- [Ansible ping module source and documentation](https://github.com/ansible/ansible/blob/stable-2.20/lib/ansible/modules/ping.py)
 
 </details>
 
@@ -164,7 +151,7 @@ Your resume report started at `2026-10-21T20:35:49Z` and ended with **`RESULT: T
 
 **What changed?** The PATH correction allowed the recovery to finish the collection setup that failed earlier. The project environment supplied the intended Python/Ansible/Kolla/OpenStack commands. Terraform was already available; this recovery did not install it. The summary establishes its location, not its version or provider operation.
 
-**This checkpoint is complete.** The result verifies collection command completion, declared Python dependencies and executable discovery. It does not test node SSH access, OpenStack APIs or a running cloud. No deployment was attempted. Next comes the lesson for Ansible SSH access as `joe` and reviewed host configuration.
+**This checkpoint is complete.** The result verifies collection command completion, declared Python dependencies and executable discovery. It does not test node SSH access, OpenStack APIs or a running cloud. No deployment was attempted. SSH access as `joe` has since passed on all three nodes; reviewed host configuration comes later.
 
 <details>
 <summary>Completed recovery lesson: collection purposes, script actions and command</summary>

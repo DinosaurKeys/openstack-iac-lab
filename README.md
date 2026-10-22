@@ -2,9 +2,9 @@
 
 Three controllers on Ubuntu 24.04, Cinder LVM, Ansible, Terraform, an application, and monitoring.
 
-**Current step: Stage 1 — recover access with a new project key.** Joe does not remember the old key's passphrase. The script now uses `~/.ssh/openstack-iac-lab-ansible`, leaving the original pair intact. [Read the recovery and prompt table](docs/01-openstack-foundation.md#recover-access-with-a-new-project-key), then run the existing all-node script with the updated files.
+**Current step: Stage 1 — SSH access complete; understand the key flow.** Hermes keeps the private key; all three nodes received its public key. [Read the beginner lesson and diagram](docs/01-openstack-foundation.md#the-idea-hermes-proves-its-identity). The successful setup does not need repeating.
 
-**Latest observed result:** the old key was created, but loading stopped before any node-copy phase. Joe now confirms that its passphrase is unknown and he tried the account password/Enter. Recovery with the new filename is prepared; its actual result and Ansible `ping` remain unverified. Hermes tools are ready (`TOOLS_FOUND`); no repeat installation is needed. [The successful all-node USB test remains recorded](docs/00-hermes-codex-and-node-reset.md#observed-usb-link-results).
+**Latest observed result:** the SSH report starting `2026-10-22T06:33:11Z` ends with `RESULT: SSH_READY for all`. The new `~/.ssh/openstack-iac-lab-ansible` pair was created and loaded; each node received one public key, accepted a fresh key-only login as `joe`, and returned Ansible `pong`. Sudo policy is unchanged; this run did not test privilege escalation or deploy OpenStack. Hermes tools remain ready (`TOOLS_FOUND`).
 
 **Confirmed by Joe:** same mini switch/LAN `192.168.0.0/24`, DHCP `.2–.149`, `.100` reserved, and no static devices in `.150–.199`. He explicitly offers `.150/.151/.152`; final pool size still needs a choice because all current workloads together need five external addresses. The `.100` DHCP binding/current lease remain unspecified. [Read the ping interpretation and IP budget](docs/00-hermes-codex-and-node-reset.md#reviewed-windows-ping-and-address-budget).
 
@@ -44,7 +44,7 @@ Follow this table **from top to bottom**, reviewing the result at each stop. Com
 | 2 · Stage 0 — **done** | `reset-ceph.sh` removed the recorded allocations | Release SATA disks retained by the old deployment | All three report CLEANED; Ubuntu backing unchanged |
 | 3 · Stage 0 — **links done; allocation details pending** | Record no static users in `.150–.199`; settle pool size and `.100` DHCP binding | Three external IPs are smaller than the five-address coexistence budget | No repeat ping/link test; final cloud inputs wait for the outstanding facts |
 | 4 · Stage 1 — **done** | Resume collections completed; short summary reviewed | Finish collection installation and verify Python dependencies/tool locations | All phases COMPLETED; RESULT TOOLS_FOUND |
-| 5 · Stages 1 + 2 — **SSH key recovery** | Pull the update, start the terminal's agent, run `prepare-ssh.sh joe --node all --apply` | Create/use the new `openstack-iac-lab-ansible` pair and preserve the forgotten pair | Review SSH_READY for all; host configuration follows its remaining input checks |
+| 5 · Stages 1 + 2 — **SSH done** | One public key added per node; fresh key login and Ansible Python checks passed | Let Ansible connect as `joe` using Hermes's selected private key | SSH_READY for all observed; host preparation follows input review |
 | 6 · Stages 1 + 2 | `labctl netplan`, then the console procedure in Stage 2, one node at a time | Bind each USB MAC to `ext0` and retain the original management address | SSH, DNS, default route and provider link checked |
 | 7 · Stage 1 | `labctl --ask-become-pass storage` | Create **one** `cinder-volumes` VG on the reviewed blank node3 SATA disk | node3 SATA owns Cinder; Ubuntu VG stays separate |
 | 8 · Stage 1 | `labctl init-config`, then the Kolla phases below | Deploy the control, networking, compute and volume services | Kolla checks and service lists pass |
@@ -99,10 +99,9 @@ For `first`, `app` or `monitor`, run `python scripts/labctl.py terraform NAME AC
 | DHCP product/device and `.100` reservation's client/current lease | Joe confirms a reservation; its exact owner and absence of a conflicting user remain unknown |
 | Final external pool size | Joe confirms `.150–.199` has no static users and offers three IPs; full coexistence needs five |
 | Reviewed node3 disk reuse and unresolved diagnostic limitations | Deleting Ceph does not repair hardware or resolve a failed NVMe log query |
-| Hermes public-key access to `joe` on all nodes | Password-only discovery does not establish unattended Ansible SSH |
 | Non-overlapping tenant CIDRs, HCP organization/workspaces and scoped cloud credentials | These depend on your network and accounts |
 
-**Current checkpoint: row 5, SSH key recovery.** Follow the [short recovery lesson and password-prompt table](docs/01-openstack-foundation.md#recover-access-with-a-new-project-key), then share `build/ssh-access-summary.txt`. Node/cloud configuration still needs reviewed inputs.
+**Current checkpoint: row 5 complete.** The [key-flow lesson](docs/01-openstack-foundation.md#the-idea-hermes-proves-its-identity) explains private/public keys, the agent, blank passphrases and your successful output. Review remaining host-configuration inputs before later configure/preflight/base and Netplan steps.
 
 <details>
 <summary>Reference: first checkout and initial discovery</summary>

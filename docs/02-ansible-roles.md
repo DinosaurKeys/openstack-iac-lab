@@ -1,6 +1,92 @@
 # Stage 2 — Ansible roles, YAML inventory, and node rebuilding
 
-**Current checkpoint:** Stage 1 host preparation, using the Ansible roles explained here. SSH, sudo and the common-role preview passed on all three nodes. **Next: apply the reviewed common role and verify the result.**
+**Current checkpoint:** Stage 1 host preparation. The apply run reached node1 but stopped at a duplicate hostname lookup. **Next: pull the corrected common role and resume the same all-node run.**
+
+## Resolve duplicate hostname lookup
+
+### 1. What the report means
+
+Report start: **`2026-10-22T12:12:23Z`**. Node1 returned **two IPv4 addresses for its name**:
+
+| Address returned for `node1` | Meaning |
+|---|---|
+| `127.0.1.1` | Local loopback address |
+| `192.168.0.200` | Its preserved management address |
+
+**Line 41 identifies the verification task that caught the conflict.** The YAML ran successfully up to that assertion. We require the lab node names to resolve to their management IPs, so verification stopped the run.
+
+The original role added its marked hosts block without handling the selected node's existing loopback alias. The correction belongs in the common role; the resolver check remains strict. A typical entry behind this result is `127.0.1.1 node1`; the full hosts file was not supplied, so the corrected role reads the actual file before editing it.
+
+| What this run established | Status |
+|---|---|
+| Node1's declared packages, hostname and management IP | Passed |
+| Node1's Chrony service | Running and enabled |
+| Node1's name lookup | Failed: loopback plus management IP |
+| Clock synchronization check | Not reached |
+| Node2 and node3 | Not attempted in this run |
+
+The `(item=node2)` and `(item=node3)` lines are name lookups performed on node1.
+
+Node1's recap is `changed=0`: the reported run found the package/host/service configuration already present. It does not establish when those earlier changes happened.
+
+### 2. What the correction does
+
+The role now reads `/etc/hosts` and renders **one corrected file**. It maintains the marked management block, and removes only the selected node's exact hostname from `127.0.1.1` records. Other aliases and comments are retained. If that record has no aliases left, the empty record is removed; an attached comment is kept as a comment line.
+
+The `localhost` and IPv6 entries are retained. A changed file receives a dated backup, and its existing permissions are preserved. The management mappings stay:
+
+| Name | Required IPv4 address |
+|---|---|
+| `node1` | `192.168.0.200` |
+| `node2` | `192.168.0.201` |
+| `node3` | `192.168.0.202` |
+
+The renderer refuses incomplete or repeated lab markers. If the resolver still returns an extra address, verification continues to stop and show the actual result.
+
+### 3. Resume from Hermes
+
+From `~/git/openstack-iac-lab`:
+
+```bash
+git pull --ff-only
+bash scripts/apply-common.sh joe --node all --apply
+```
+
+The wrapper re-evaluates the existing desired state, corrects the hosts file where needed, verifies node1, then proceeds to node2 and node3. Each selected node asks for its Ubuntu `joe` sudo password. A failure stops later nodes; already completed changes remain.
+
+Expected final result:
+
+```text
+RESULT: COMMON_APPLIED_OK for all; installed baseline and time synchronization verified.
+```
+
+**Share the printed summary.** The full log is `build/common-apply-report.txt`. The correction has local fixture checks; successful recovery on the real nodes is still pending.
+
+### 4. Why the report path said Permission denied
+
+| Terminal input | What Bash does |
+|---|---|
+| `/home/joe/git/openstack-iac-lab/build/common-apply-report.txt` | Tries to execute the text report as a program |
+| `cat build/common-apply-report.txt` | Reads and displays it; this worked in the supplied output |
+
+The report is intentionally private text data. Reading it with `cat` is the appropriate operation.
+
+<details>
+<summary>Code map for this correction</summary>
+
+| File | Job |
+|---|---|
+| `ansible/roles/common/tasks/hosts.yml` | Read the actual hosts file, then write a backed-up candidate through Ansible |
+| `ansible/roles/common/filter_plugins/lab_hosts.py` | Build the management block and retire only the selected node's loopback alias |
+| `ansible/roles/common/templates/hosts.j2` | Render the calculated file contents |
+| `ansible/tasks/verify-common.yml` | Keep the existing strict resolver and baseline checks |
+
+The filter only calculates text on Hermes; Ansible performs the node file operation. No new package or service was introduced by this fix. Native local fixtures exercise preview, backup, preserved permissions and an unchanged second application.
+
+</details>
+
+<details>
+<summary>Apply workflow reference: package transaction, diagram and verification</summary>
 
 ## Apply the reviewed common role
 
@@ -84,6 +170,8 @@ The wrapper prints the short summary and saves **`build/common-apply-summary.txt
 **Share the printed apply summary.** We will review the real result before networking changes. The role itself performs no Netplan edit, disk allocation or OpenStack deployment. The real apply remains unverified until its report is supplied.
 
 Sources: [Ubuntu time synchronization](https://ubuntu.com/server/docs/how-to/networking/timedatectl-and-timesyncd/), [Ubuntu tzdata packages](https://packages.ubuntu.com/search?keywords=tzdata), [Ansible APT semantics](https://docs.ansible.com/projects/ansible/latest/collections/ansible/builtin/apt_module.html), [Chrony waitsync](https://chrony-project.org/doc/4.5/chronyc.html#waitsync).
+
+</details>
 
 <details>
 <summary>Completed lesson: package purposes, common-role structure and the preview command</summary>

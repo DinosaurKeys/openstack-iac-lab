@@ -49,7 +49,9 @@ elif name=='ansible-playbook':
     tasks=yaml.safe_load((path.parent/include['ansible.builtin.include_tasks']).read_text())
     assert 'COMMON_APPLIED_OK:' in tasks[-1]['ansible.builtin.debug']['msg']
     role=yaml.safe_load((path.parent.parent/'roles/common/tasks/main.yml').read_text())
-    assert next(t['ansible.builtin.blockinfile']['backup'] for t in role if 'ansible.builtin.blockinfile' in t) is True
+    hosts_task=next(t for t in role if 'ansible.builtin.import_tasks' in t)
+    hosts_tasks=yaml.safe_load((path.parent.parent/'roles/common/tasks'/hosts_task['ansible.builtin.import_tasks']).read_text())
+    assert next(t['ansible.builtin.template']['backup'] for t in hosts_tasks if 'ansible.builtin.template' in t) is True
     if failure=='cancel' and node=='node1': sys.exit(99)
     if failure=='sudo' and node=='node2': print('Fixture: Incorrect sudo password'); sys.exit(2)
     if failure=='marker' and node=='node1': print('Fixture: no matching hosts'); sys.exit(0)
@@ -96,7 +98,7 @@ class CommonApplyTests(unittest.TestCase):
             (work/'bin').mkdir()
             for path in ['ansible.cfg','ansible/inventory/hosts.yml','ansible/inventory/group_vars/all.yml',
                          'ansible/playbooks/base.yml','ansible/tasks/verify-common.yml',
-                         'ansible/roles/common/tasks/main.yml']:
+                         'ansible/roles/common/tasks/main.yml','ansible/roles/common/tasks/hosts.yml']:
                 target=work/path
                 target.parent.mkdir(parents=True,exist_ok=True)
                 target.write_text((ROOT/path).read_text())

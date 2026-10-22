@@ -1,6 +1,6 @@
 # Validation and deployment status
 
-This repository contains implementation code and learning guides. The user has completed the three Ubuntu reinstalls, basic discovery, privileged storage collection, exact old-Ceph removal on all three nodes, passive network inspection, and temporary USB link measurement/restoration on all three nodes. OpenStack deployment remains untested. Generated examples are not claimed as observed deployment results.
+This repository contains implementation code and learning guides. The user has completed the three Ubuntu reinstalls, basic discovery, privileged storage collection, exact old-Ceph removal, passive network inspection, temporary USB link measurement/restoration, Hermes tools, SSH/Python tests and Ansible sudo identity checks on all three nodes. Common-role preview/application and OpenStack deployment remain untested on the lab. Generated examples are not claimed as observed deployment results.
 
 ## Checked locally
 
@@ -9,7 +9,7 @@ This repository contains implementation code and learning guides. The user has c
 - Checked all Ansible playbooks with ansible-playbook --syntax-check.
 - Exercised input guards for preserved node addresses, duplicate provider MACs, reserved floating addresses, and overlapping workload networks.
 - Exercised storage guards for wrong serials, mounted OS descendants, existing Ceph signatures, and partitioned/nonblank disks.
-- Ran 120 tests: 55 input/storage/confirmation/terminal checks, 31 USB link checks, nine Hermes recovery checks, 17 SSH access checks and eight administrator-access checks. Hardware reads/actions, installers and SSH connections in these tests are fixtures or recorded mocks; no actual package, disk or NIC operation is performed.
+- Ran 129 tests: 55 input/storage/confirmation/terminal checks, 31 USB link checks, nine Hermes recovery checks, 17 SSH access checks, eight administrator-access checks and nine common-role preview checks. Hardware reads/actions, installers and SSH connections in these tests are fixtures or recorded mocks; no actual package, disk or NIC operation is performed.
 - Added regression coverage for the actual Linux model strings from all three nodes, rejection of unrecorded prefixes, diagnostic values before a model stop, and exact byte-capacity mismatch messages. Model/capacity failures still reject apply before any mutation or confirmation.
 - Tested the actual wrapper and real Python input through a pseudo-terminal with simulated SSH: full phrases reach all three nodes, a partial ERASE can be corrected, and cancellation/EOF/three mismatches stop without a disk command. Plan-only mode visits all three without asking for approval.
 - Compared LV aliases by their canonical device paths: a /dev/mapper name must resolve to the same device as the recorded /dev/VG/LV path. Regression fixtures accept that same-device alias and reject an unrelated LV; ownership checks remain exact.
@@ -210,3 +210,17 @@ Joe supplied the administrator-access report starting 2026-10-22T10:04:51Z. Loca
 The evidence establishes successful Ansible sudo access on node1/node3 and a sudo-authentication rejection on node2. It does not identify what was typed or establish the cause beyond the reported authentication failure. The documented next action uses the unchanged check-admin.sh wrapper with --node node2 and node2's Ubuntu joe password at BECOME password. It repeats only identity reads; the selected-node result must be reviewed alongside the earlier node1/node3 passes. Latest report files describe the latest selection; timestamped history retains the previous all-node run. No package, sudo-policy, network, storage or cloud configuration change is requested by this check.
 
 README, both relevant guides and the agent checkpoint now reflect the partial live result. This is a documentation-only update; no new fixture-test run or live retry is claimed, and no raw private report or credential is published.
+
+## Completed live administrator access on all three nodes
+
+Joe supplied the all-node run starting 2026-10-22T10:14:57Z. Node1 192.168.0.200, node2 192.168.0.201 and node3 192.168.0.202 each verified effective UID 0 and the expected hostname. Every recap reports ok=4, changed=0, unreachable=0 and failed=0. Both terminal output and the summary end ADMIN_ACCESS_OK for all. This establishes successful SSH plus Ansible sudo identity checks at that time. The earlier node2 rejection is resolved in the later run; the output does not establish why the earlier password entry was rejected. No host preparation or cloud deployment is inferred from these identity reads.
+
+## Next lesson: preview the common role before installation
+
+The current Stage 2 workbook, linked from Stage 1 and README, now explains every declared package, system installation location, desired hostname, marked hosts block and Chrony behavior. Completed sudo/key recovery is folded into reference. The seven packages remain declared in group_vars; no package list expansion, network change or disk allocation is introduced.
+
+The new preview-common.sh wrapper uses the existing project environment and tracked preparation inventory, validating the fixed three IPs, joe account and selected key. It always invokes base.yml with --check --diff, sudo/root and one password prompt per selected node. It saves private combined output, a short summary and timestamped history. A successful Ansible exit also requires the playbook's node-specific preview completion marker; missing/skipped-host output cannot claim success. Ordinary failures continue to later previews; cancellation stops. The wrapper has no apply mode.
+
+The common role disables automatic python3-apt helper installation. For preview only, it reads service facts and defers the Chrony enable/start check if its unit is absent or not found; the explicit message describes that limitation. Existing units are checked in Ansible check mode. A real run still requires enabling/starting Chrony after package installation. Nine isolated fixture tests cover preview-only flags, separate/all/single selections, private reports, sudo rejection/continuation, cancellation, missing completion marker, inventory mismatch and invalid/nonterminal execution. The actual YAML service conditions are evaluated for absent/not-found/present units in preview and normal modes. Fixtures do not contact lab nodes or execute APT/services. The real preview and common-role application remain pending.
+
+Local validation for this change passed: all 129 tests, native syntax checks for all seven Ansible playbooks, shell syntax, repository source/relative-link checks, workbook details/fence structure and Bash examples. The upstream Ansible check/diff and APT documentation and Ubuntu time-client guidance were reviewed. These checks establish source/fixture behavior, not a live preview, package transaction, service startup or clock synchronization.

@@ -4,3 +4,8 @@
   gather_facts: true
   roles:
     - common
+  post_tasks:
+    - name: Mark the completed common role preview
+      ansible.builtin.debug:
+        msg: "COMMON_PREVIEW_OK: {{ inventory_hostname }}; predictions only; service startup still requires a real run."
+      when: ansible_check_mode

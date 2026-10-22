@@ -1,10 +1,106 @@
 # Stage 2 — Ansible roles, YAML inventory, and node rebuilding
 
-**Prerequisite:** complete [Stage 1's SSH-key lesson](01-openstack-foundation.md#ssh-access-for-ansible) and review `SSH_READY` before the commands below. Host inventories select `~/.ssh/openstack-iac-lab-ansible`; keep that key unlocked in Hermes's current `ssh-agent`. Key login and sudo authorization are separate.
+**Current checkpoint:** Stage 1 host preparation, using the Ansible roles explained here. SSH and sudo checks have passed on all three nodes. **Next: preview the common role.**
+
+## Preview the common role
+
+### 1. What we have proved
+
+The report starting **`2026-10-22T10:14:57Z`** ends with **`ADMIN_ACCESS_OK for all`**.
+
+| Node | Preserved address | Administrator check |
+|---|---|---|
+| node1 | `192.168.0.200` | Root UID `0`; hostname matched |
+| node2 | `192.168.0.201` | Root UID `0`; hostname matched |
+| node3 | `192.168.0.202` | Root UID `0`; hostname matched |
+
+Each recap shows `ok=4`, `changed=0`, `unreachable=0`, `failed=0`. Ansible can now perform administrator tasks. The earlier node2 authentication failure is resolved in this run; the log does not establish what caused the earlier rejected entry.
+
+### 2. What is the common role?
+
+A **role** is a reusable folder of Ansible tasks. Our `common` role describes the basic packages, node names and clock service wanted on every node. It prepares Ubuntu for later OpenStack work.
+
+```mermaid
+flowchart TD
+    I["hosts.yml: three nodes"] --> P["base.yml: use common"]
+    P --> R["common/tasks/main.yml"]
+    G["group_vars: package list"] --> R
+    R --> A["APT packages"]
+    R --> N["Hostnames and hosts entries"]
+    R --> T["Chrony clock service"]
+```
+
+### 3. What would be installed, where and why?
+
+These are **Ubuntu system packages on node1, node2 and node3**, installed through APT. Programs live under `/usr`; system configuration lives under `/etc`. Hermes keeps its existing tools in `~/venvs/kolla-iac`.
+
+| Package | Main command | Why the node needs it |
+|---|---|---|
+| `curl` | `curl` | Test HTTP endpoints and transfer files |
+| `git` | `git` | Retrieve and inspect versioned source when needed |
+| `jq` | `jq` | Read and filter JSON command output |
+| `lvm2` | `lvm`, `pvs`, `vgs`, `lvs` | Manage Linux logical volumes; node3 will later use LVM for Cinder |
+| `smartmontools` | `smartctl` | Read disk health information |
+| `chrony` | `chronyd`, `chronyc` | Keep the node clock synchronized |
+| `python3` | `python3` | Run Ansible modules on the node |
+
+`state: present` means keep packages already installed and install missing ones. APT also resolves dependencies and may replace conflicting packages. **Review any proposed removals**, including replacement of an existing time client such as `systemd-timesyncd` by Chrony. Package versions and the transaction depend on each node's APT metadata.
+
+The APT module also needs the existing `python3-apt` system package. Automatic installation of that helper is disabled: if it is missing, the preview stops for review.
+
+| Other role task | Later real-run effect | Why |
+|---|---|---|
+| Hostname | Ensure `node1`, `node2` or `node3` matches inventory | Keep node identity consistent |
+| `/etc/hosts` | Maintain one marked block with `.200 node1`, `.201 node2`, `.202 node3` | Resolve the management names locally |
+| Chrony service | Enable at boot and start it | Maintain time synchronization |
+
+The role contains no Netplan edit, disk allocation or cloud deployment. Management IPs stay as recorded above.
+
+### 4. Preview all three nodes
+
+**Preview means calculate, then review.** The wrapper always runs the existing `base.yml` playbook with `--check --diff`; it has no apply mode. Ansible predicts supported changes and shows available before/after differences.
+
+| File | Job |
+|---|---|
+| `ansible/inventory/group_vars/all.yml` | Declares the seven packages, `joe` account and project key |
+| `ansible/playbooks/base.yml` | Selects the common role for the lab nodes |
+| `ansible/roles/common/tasks/main.yml` | Defines the desired host configuration |
+| `scripts/preview-common.sh` | Checks inventory, previews each selected node and saves one combined report |
+
+**Run on Hermes from `~/git/openstack-iac-lab`:**
+
+```bash
+git pull --ff-only
+bash scripts/preview-common.sh joe --node all
+```
+
+At each `BECOME password:` prompt, enter that node's Ubuntu `joe` password. The wrapper uses `~/venvs/kolla-iac` and the existing `~/.ssh/openstack-iac-lab-ansible` key. It asks separately for each selected node.
+
+### 5. Read the preview, then stop
+
+| Output | Meaning |
+|---|---|
+| `ok` | The task predicts no configuration change, or completed a read/check |
+| `changed` | A change is **predicted**, not applied |
+| File diff with `-` / `+` lines | Existing content / proposed content |
+| `DEFERRED: chrony.service is absent` | Package installation is predicted; its missing service cannot yet be checked |
+| `COMMON_PREVIEW_OK` | The role preview completed; review its predictions |
+| `FAILED`, final `REVIEW` | Inspect the error before any real run |
+
+**Chrony detail:** if its unit already exists, Ansible previews enabling/starting it. If absent, only that service check is deferred and explained. This preview never proves actual service startup or clock synchronization. Previewing against current APT metadata also does not prove a later download or installation will succeed.
+
+The script prints all node output and a short summary. The combined proposed changes are saved privately in **`build/common-preview-report.txt`**; the summary is `build/common-preview-summary.txt`. Timestamped history stays in ignored `build/`. Ordinary node failures are recorded while later previews continue; cancellation stops. Ansible temporary files and normal authentication logs can occur.
+
+**Share the preview output, including proposed package and `/etc/hosts` changes.** We will review those details before the real common-role run. A successful preview is not a completed host installation.
+
+Sources: [Ansible check and diff modes](https://docs.ansible.com/projects/ansible/latest/playbook_guide/playbooks_checkmode.html), [APT module](https://docs.ansible.com/projects/ansible-core/2.20/collections/ansible/builtin/apt_module.html), [Ubuntu time synchronization](https://ubuntu.com/server/docs/how-to/networking/timedatectl-and-timesyncd/).
+
+<details>
+<summary>Completed lesson: Ansible sudo access and the resolved node2 password rejection</summary>
 
 ## Check Ansible administrator access
 
-**Current result:** node1 and node3 passed; node2's sudo password was rejected. [Review the result and retry node2 only](#reviewed-result-node2-sudo-password). The all-node command below explains the completed first check.
+**Completed:** the later all-node run starting `2026-10-22T10:14:57Z` passed on all three. The commands and earlier rejection below are retained as learning history. Continue with the common-role preview above.
 
 **Stage 1 host preparation, using this stage's Ansible files.** SSH already lets Hermes log in as `joe`. Installing packages and configuring system services later require administrator privileges. This check proves that Ansible can use `sudo` before we apply the common role.
 
@@ -59,6 +155,8 @@ An ordinary node failure is recorded and the read-only checks continue to the ot
 
 ### Reviewed result: node2 sudo password
 
+**Resolved by the later all-node run:** node2, node1 and node3 all passed at `2026-10-22T10:14:57Z`. The following explains the earlier report; another authentication retry is unnecessary.
+
 Report start: **`2026-10-22T10:04:51Z`**. Final result: **`REVIEW`**.
 
 | Node | Preserved address | Observed result | Meaning |
@@ -97,6 +195,8 @@ RESULT: ADMIN_ACCESS_OK for node2; identity checks passed.
 </details>
 
 Source: [Ansible become and sudo-password prompts](https://docs.ansible.com/projects/ansible-core/devel/playbook_guide/playbooks_privilege_escalation.html).
+
+</details>
 
 ## Why roles?
 

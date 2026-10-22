@@ -28,7 +28,7 @@ esac
 repo_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$repo_dir"
 venv_dir="$HOME/venvs/kolla-iac"
-key="$HOME/.ssh/openstack-iac-lab"
+key="$HOME/.ssh/openstack-iac-lab-ansible"
 export PATH="$venv_dir/bin:$PATH"
 for tool in ssh ssh-copy-id ssh-keygen ssh-add; do
   command -v "$tool" >/dev/null || { printf 'STOP: required command missing: %s\n' "$tool" >&2; exit 1; }
@@ -43,6 +43,7 @@ report="$history/report.txt"
 summary="$history/summary.txt"
 printf 'Stage 1: SSH-key access\nClient: joe@hermes\nNodes: %s\nApply: %s\nUTC: %s\n' "$selection" "$apply" "$(date -u +%FT%TZ)" > "$report"
 cp "$report" "$summary"
+printf 'Project key: %s\n' "$key" | tee -a "$report" "$summary"
 save() {
   install -m 0600 "$report" "$repo_dir/build/ssh-access-report.txt"
   install -m 0600 "$summary" "$repo_dir/build/ssh-access-summary.txt"
@@ -74,13 +75,16 @@ if ssh-add -l >/dev/null 2>&1; then agent_code=0; else agent_code=$?; fi
 if [[ -e "$key" || -e "$key.pub" ]]; then
   [[ -f "$key" && -f "$key.pub" && -s "$key" && -s "$key.pub" ]] || stop 'Dedicated key pair is incomplete; no file was overwritten.'
 elif (( apply )); then
-  printf 'Create a passphrase for this project key when ssh-keygen asks; it is separate from node passwords.\n'
+  printf 'Creating a new project key at %s; other key files are retained.\n' "$key"
+  printf 'Choose a NEW key passphrase and save it in your password manager.\n'
+  printf 'ssh-keygen asks for it twice; ssh-add then asks for that SAME key passphrase.\n'
   install -d -m 0700 "$HOME/.ssh"
-  step 'Create dedicated key' ssh-keygen -t ed25519 -a 64 -C 'openstack-iac-lab on Hermes' -f "$key"
+  step 'Create dedicated key' ssh-keygen -t ed25519 -a 64 -C 'openstack-iac-lab Ansible on Hermes' -f "$key"
 else
   stop 'No dedicated key exists. Use the documented --apply setup step first.'
 fi
 awk 'NF {count++; if ($1 != "ssh-ed25519" || NF < 2) bad=1} END {exit (count != 1 || bad)}' "$key.pub" || stop 'Expected exactly one dedicated ED25519 public key.'
+printf 'Key-loading prompt: enter the key passphrase chosen at creation. A blank response cancels this prompt.\n'
 step 'Unlock key for four hours' ssh-add -t 4h "$key"
 step 'Verify agent can use public key' ssh-add -T "$key.pub"
 fingerprint=$(ssh-keygen -lf "$key.pub") || stop 'Cannot read public-key fingerprint.'

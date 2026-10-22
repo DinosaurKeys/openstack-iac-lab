@@ -1,70 +1,66 @@
 # Stage 1 — Three controllers, two computes, one Cinder LVM host
 
-**Current checkpoint:** Hermes tools and the dedicated key are present. The direct key-load check reached a passphrase prompt, then exited `1`. [Read what that establishes and the one clarification needed](#current-ssh-stop-key-created-unlock-failed). No repeat installation is needed.
+**Current checkpoint:** Hermes tools are ready, but the old client key's passphrase is unknown. [Create a new project key with the existing all-node script](#recover-access-with-a-new-project-key). The old pair stays intact; no repeat tool installation is needed.
 
 ## SSH access for Ansible
 
 **Stage 1 — connect the deployment computer to the nodes.** Password SSH worked during discovery. Ansible needs a repeatable login method. This step installs one dedicated public key, then tests key login and remote Python on all three nodes.
 
-### Current SSH stop: key created, unlock failed
+### Recover access with a new project key
 
-**Latest result:** your direct `ssh-add` check displayed a passphrase prompt, then `ssh-add exit=1`.
+**Reviewed result:** you do not remember the existing SSH key's passphrase. You tried the Ubuntu account password and pressed Enter. These are separate credentials: the key passphrase protects a file on Hermes; the account password logs into Ubuntu.
 
-| Observed | Meaning |
+A forgotten key passphrase cannot be recovered by OpenSSH. The recovery is a new key pair and installation of its public key. Source: [OpenSSH key-passphrase recovery](https://man.openbsd.org/ssh-keygen).
+
+| Key files on Hermes | Recovery action |
 |---|---|
-| `Enter passphrase for /home/joe/.ssh/openstack-iac-lab:` | OpenSSH reached the existing key's passphrase-entry step |
-| `ssh-add exit=1` | The load command failed; this code alone does not identify why |
-| No `Identity added` result or node checks | Key loading has not been verified; this direct command contacted no nodes |
+| `~/.ssh/openstack-iac-lab` and `.pub` | Retained at their existing names; no deletion, overwrite or passphrase guessing |
+| `~/.ssh/openstack-iac-lab-ansible` and `.pub` | Create if absent; reuse if already complete. This is now the key selected by the script and host/Kolla inventories |
 
-**Why can it stop without an error?** In the reviewed OpenSSH 9.6 code, an empty passphrase response ends the load quietly. A terminal input-read failure can also return an empty response. A wrong, non-empty passphrase normally produces a retry prompt. Your single prompt followed by exit `1` is **consistent with empty input**, but we have not established what was entered or why it was empty.
+**What the script does:** create the new pair on Hermes, load its private key into the agent for four hours, install only its public key as `joe` on node1 `.200`, node2 `.201` and node3 `.202`, then test fresh key-only SSH and Ansible Python `ping` on all three. It installs no packages and makes no network, disk or sudo-policy changes.
 
-**Next: clarify the prompt interaction, without another command.** Did you type the passphrase chosen when this key was created, type your Ubuntu account password, or press Enter without typing? If you do not remember the key passphrase, say so. Describe the action only; do not send the passphrase itself.
-
-| Term | What it protects |
-|---|---|
-| Key passphrase | This private-key file on Hermes; chosen during key creation |
-| Ubuntu account password | The `joe` login account; separate from the key's passphrase |
-
-Sources: [OpenSSH exit status](https://man.openbsd.org/ssh-add), [9.6 key-loading code](https://github.com/openssh/openssh-portable/blob/V_9_6_P1/ssh-add.c#L300-L327), [input handling](https://github.com/openssh/openssh-portable/blob/V_9_6_P1/readpass.c#L123-L201). These explain possible behavior, not a confirmed cause on Hermes.
-
-<details>
-<summary>Reviewed history: original script stop, empty log and direct diagnostic command</summary>
-
-Your summary started at `2026-10-21T21:09:40Z`:
-
-| Phase | Observed result | Meaning |
-|---|---|---|
-| Create dedicated key | `COMPLETED` | The key-generation command succeeded on Hermes |
-| Unlock key for four hours | `STOP` | The script reported failure; the full-log extract also contains no error text |
-| Public-key installation, node login and Ansible `ping` | Not reached in this run | The script stopped before contacting node1; `--node all` does not skip a failed prerequisite |
-
-**What were we trying to do?** `ssh-add` loads the existing key into Hermes's `ssh-agent` for four hours. That lets later SSH/Ansible commands use the key without repeatedly asking for its passphrase. This local prerequisite comes before any node connection.
-
-**What does your latest output mean?** `sed` worked: the heading and `STOP` are the only saved lines in that section. They confirm where the script stopped, but give no cause. OpenSSH reads passphrases directly from the terminal, so those prompts can be absent from the saved log. The original script also omitted command exit codes; it now records them separately from the logging command's status.
-
-The old sentence **“Earlier public-key additions remain”** was generic wording. No node-copy phase was reached in this run. The corrected script reports whether any public-key installation was attempted.
-
-The completed diagnostic used these two lines directly in the same Hermes terminal:
+**Run this block on Hermes from `~/git/openstack-iac-lab`:**
 
 ```bash
-ssh-add -v -t 4h ~/.ssh/openstack-iac-lab
-printf 'ssh-add exit=%s\n' "$?"
+git pull --ff-only
+eval "$(ssh-agent -s)"
+bash scripts/prepare-ssh.sh joe --node all --apply
+cat build/ssh-access-summary.txt
 ```
 
-| Line | Purpose / effect |
+`git pull` gets the corrected script and inventories. `eval` starts an agent connected to this terminal; keep using this terminal for Ansible. The script handles all three nodes. `cat` displays its short result.
+
+**Read this prompt table before running:**
+
+| Prompt | What to enter |
 |---|---|
-| `ssh-add -v -t 4h ...` | Show diagnostics while loading the existing key for four hours; if successful, changes only the agent's temporary key state on Hermes |
-| `printf ... "$?"` | Print the previous command's exit code immediately, before another command replaces it |
+| `Enter passphrase (empty for no passphrase):` | Choose a **new key passphrase** and save it in your password manager |
+| `Enter same passphrase again:` | Repeat that new key passphrase |
+| `Enter passphrase for ...openstack-iac-lab-ansible:` | Enter the **same new key passphrase** a third time; this loads the key into the agent |
+| `joe@192.168.0.200/201/202's password:` | Enter that node's Ubuntu `joe` login password when requested |
 
-**If prompted:** enter the key passphrase chosen during key creation, at the terminal prompt. It is not the node's `joe` account password. Typed characters remain hidden. This check creates no key, installs no package and contacts no node. It uses the existing agent; it does not start a new one.
+Characters stay hidden while typing. The new-key creation prompts appear only if the new pair does not already exist. Pressing Enter alone at the **key-loading** prompt cancels it. A later retry reuses the new pair; enter the passphrase chosen for that pair.
 
-| `ssh-add exit=` | Meaning |
+| Summary result | Meaning |
 |---|---|
-| `0` | The load command succeeded; node key installation is still a later step |
-| `1` | The command failed; review the visible message/prompt outcome |
-| `2` | `ssh-add` could not contact the agent |
+| `Project key: /home/joe/.ssh/openstack-iac-lab-ansible` | The script selected the new filename |
+| `RESULT: SSH_READY for all` | Key login, host identity/address checks and Ansible Python ping passed on all three |
+| `STOP` | Review the named phase and exit codes; later steps were not attempted |
 
-**Reviewed result:** the direct check reached the passphrase prompt and exited `1`, as recorded above. Keep the existing key; clarify what was entered before another command. Source: [OpenSSH ssh-add: terminal prompts, lifetime and exit status](https://man.openbsd.org/ssh-add).
+**Checkpoint:** share `build/ssh-access-summary.txt` before host configuration. This recovery has local fixture checks; its live lab result is pending. No node reinstall is required for an unknown client-key passphrase.
+
+<details>
+<summary>Reviewed history: why the previous key-loading attempt stopped</summary>
+
+### Current SSH stop: key created, unlock failed
+
+- The original summary started at `2026-10-21T21:09:40Z`: key creation completed, then loading stopped before any node-copy, login or Ansible phase.
+- The saved unlock section contained only its heading and `STOP`. The original generic sentence about earlier public-key additions did not establish that any copy occurred.
+- A direct `ssh-add -v -t 4h ~/.ssh/openstack-iac-lab` displayed one passphrase prompt, then exit `1`. The script's logging pipeline was not involved in that check.
+- OpenSSH has a quiet failure path for an empty response, including some input-read failures. A wrong non-empty passphrase normally prompts another attempt. The output alone did not identify what was entered.
+- Joe subsequently confirmed that he does not remember the key passphrase and had tried the account password/Enter. The active recovery above uses a new filename and preserves the original pair.
+
+The script now records the failed command's `command_exit` separately from the logging command's `log_exit`, and states whether public-key installation was attempted. Sources: [ssh-add exit status](https://man.openbsd.org/ssh-add), [reviewed 9.6 key-loading code](https://github.com/openssh/openssh-portable/blob/V_9_6_P1/ssh-add.c#L300-L327), [input handling](https://github.com/openssh/openssh-portable/blob/V_9_6_P1/readpass.c#L123-L201).
 
 </details>
 
@@ -72,8 +68,8 @@ printf 'ssh-add exit=%s\n' "$?"
 
 | Part | Where it lives | Purpose |
 |---|---|---|
-| Private key: `~/.ssh/openstack-iac-lab` | Hermes only | Proves Hermes has the matching key; never copy or commit this file |
-| Public key: `~/.ssh/openstack-iac-lab.pub` | Hermes; copied into `joe`'s `~/.ssh/authorized_keys` on each node | Allows that key to log in as `joe` |
+| Private key: `~/.ssh/openstack-iac-lab-ansible` | Hermes only | Proves Hermes has the matching key; never copy or commit this file |
+| Public key: `~/.ssh/openstack-iac-lab-ansible.pub` | Hermes; copied into `joe`'s `~/.ssh/authorized_keys` on each node | Allows that key to log in as `joe` |
 | `ssh-agent` | Running on Hermes | Holds the unlocked key for up to four hours so SSH/Ansible can use it without repeating its passphrase |
 
 The **key passphrase** protects the private-key file. The **node password** authorizes its public-key installation. **Sudo** is a separate permission: later root tasks will still ask for the sudo password.
@@ -95,7 +91,7 @@ The [SSH script](../scripts/prepare-ssh.sh) uses the same procedure for node1 `.
 Ansible `ping` is not an ICMP/network ping. It runs a small Python module and may create/clean temporary module files under `joe`'s account. This step installs no node packages and changes no network, disk, sudo or SSH-server policy.
 
 <details>
-<summary>Setup command reference — review the current unlock error before retrying</summary>
+<summary>General setup reference — the active recovery above uses the new filename</summary>
 
 ### Initial setup on Hermes
 
@@ -121,7 +117,7 @@ The `eval` line starts an agent and connects **this terminal** to it. Keep this 
 
 Latest summary: **`build/ssh-access-summary.txt`**. Full log: `build/ssh-access-report.txt`. The key stays outside Git; reports and the test inventory are in ignored, private `build/` files.
 
-**Checkpoint:** the script stopped during unlock; the later direct check reached passphrase entry and exited `1`. No `SSH_READY` result has been observed. Tracked/generated host inventories select this dedicated key; workload VM keys remain a separate later input. Clarify the prompt interaction before another all-node run or host configuration. Pull the updated script before that later run.
+**Checkpoint:** the old key's passphrase is unknown. The active recovery uses `~/.ssh/openstack-iac-lab-ansible`, leaving the old pair intact. No `SSH_READY` result has been observed. Tracked/generated host inventories select the new key; workload VM keys remain a separate later input.
 
 </details>
 
@@ -134,7 +130,7 @@ After four hours, or from a new terminal, start an agent and unlock the existing
 
 ```bash
 eval "$(ssh-agent -s)"
-ssh-add -t 4h ~/.ssh/openstack-iac-lab
+ssh-add -t 4h ~/.ssh/openstack-iac-lab-ansible
 ```
 
 That does not create another key or reinstall it on nodes. The passphrase is still needed to unlock the file; only the agent's unlocked copy expires. Existing unrelated keys/agents are not deleted by this script.

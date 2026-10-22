@@ -84,7 +84,12 @@ class SSHAccessTests(unittest.TestCase):
             (venv/'bin').mkdir(parents=True)
             keys=work/'ssh'
             keys.mkdir()
-            key=keys/'openstack-iac-lab'
+            old_key=keys/'openstack-iac-lab'
+            old_public=keys/'openstack-iac-lab.pub'
+            old_key.write_text('FIXTURE_OLD_PRIVATE_DO_NOT_LOG')
+            old_public.write_text('ssh-ed25519 AAAAOLD retained\n')
+            original_pair={p:p.read_bytes() for p in [old_key,old_public]}
+            key=keys/'openstack-iac-lab-ansible'
             if key_state!='absent':
                 key.write_text('FIXTURE_PRIVATE_DO_NOT_LOG')
                 if key_state!='incomplete':
@@ -92,7 +97,7 @@ class SSHAccessTests(unittest.TestCase):
             source=(ROOT/'scripts/prepare-ssh.sh').read_text()
             # Redirect fixture locations only; do not alter HOME.
             source=source.replace('venv_dir="$HOME/venvs/kolla-iac"','venv_dir="'+str(venv)+'"')
-            source=source.replace('key="$HOME/.ssh/openstack-iac-lab"','key="'+str(key)+'"')
+            source=source.replace('key="$HOME/.ssh/openstack-iac-lab-ansible"','key="'+str(key)+'"')
             source=source.replace('"$HOME/.ssh"','"'+str(keys)+'"')
             (work/'scripts/prepare-ssh.sh').write_text(source)
             commands=['hostname','id','ip','ssh','ssh-copy-id','ssh-add','ssh-keygen']
@@ -122,9 +127,13 @@ class SSHAccessTests(unittest.TestCase):
                 self.assertEqual(summary.stat().st_mode&0o777,0o600)
                 self.assertEqual(report.stat().st_mode&0o777,0o600)
                 self.assertNotIn('FIXTURE_PRIVATE_DO_NOT_LOG',report.read_text())
+                self.assertNotIn('FIXTURE_OLD_PRIVATE_DO_NOT_LOG',report.read_text())
                 history=[p for p in report.parent.glob('ssh-access-*') if p.is_dir()]
                 self.assertEqual(history[0].stat().st_mode&0o777,0o700)
             calls=[json.loads(row) for row in audit.read_text().splitlines()] if audit.exists() else []
+            for path,original in original_pair.items():
+                self.assertEqual(path.read_bytes(),original,'The forgotten key pair must remain intact')
+            self.assertFalse(any(str(old_key) in call or str(old_public) in call for call in calls))
             return result,text,calls
 
     def test_all_nodes_public_only_and_key_verification(self):
@@ -144,6 +153,8 @@ class SSHAccessTests(unittest.TestCase):
         result,summary,calls=self.run_case(key_state='absent')
         self.assertEqual(result.returncode,0,result.stdout+result.stderr)
         self.assertEqual(len([c for c in calls if c[0]=='ssh-keygen' and '-t' in c]),1)
+        generation=next(c for c in calls if c[0]=='ssh-keygen' and '-t' in c)
+        self.assertTrue(generation[generation.index('-f')+1].endswith('/openstack-iac-lab-ansible'))
 
     def test_missing_key_in_verify_mode_stops(self):
         result,summary,calls=self.run_case(key_state='absent',args=('joe',))
@@ -238,7 +249,7 @@ class SSHAccessTests(unittest.TestCase):
         kolla=renderer.render(sample)['all']['vars']
         for variables in [common,kolla]:
             self.assertEqual(variables['ansible_user'],'joe')
-            self.assertEqual(variables['ansible_ssh_private_key_file'],'~/.ssh/openstack-iac-lab')
+            self.assertEqual(variables['ansible_ssh_private_key_file'],'~/.ssh/openstack-iac-lab-ansible')
             self.assertIn('StrictHostKeyChecking=yes',variables['ansible_ssh_common_args'])
 
 

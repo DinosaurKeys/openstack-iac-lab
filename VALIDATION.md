@@ -167,4 +167,14 @@ Joe's direct ssh-add -v -t 4h invocation displayed Enter passphrase for /home/jo
 
 Reviewed upstream OpenSSH 9.6 ssh-add.c checks for an empty passphrase and returns failure without another error; a wrong non-empty passphrase normally returns to a retry prompt. readpass.c can return an empty string after an input-read failure. Empty/cancelled input therefore fits the visible result, but it remains an inference rather than a confirmed cause. The installed Hermes build was not newly identified by this output.
 
-The active lesson records the observed result and asks what was entered, without requesting the passphrase itself. Earlier diagnostics are folded into reviewed history. No further command is recommended until that interaction is clarified. This update changes documentation only; local source/link/fence and whitespace checks apply, while the existing 112 fixture-test result is not presented as a new test run or a live SSH success.
+The lesson recorded the observed result and asked what was entered, without requesting the passphrase itself. Earlier diagnostics were folded into reviewed history. Joe subsequently clarified that the passphrase is unknown, as recorded below. That checkpoint update changed documentation only; it did not claim a new fixture-test run or live SSH success.
+
+## Forgotten passphrase: preserve the old pair and use a new filename
+
+Joe confirms that he does not remember choosing the key passphrase and had tried the Ubuntu account password/Enter. There is no need for another password guess or the same diagnostic. OpenSSH documents that a forgotten passphrase cannot be recovered and requires a new key/public-key installation.
+
+The existing prepare-ssh.sh now selects ~/.ssh/openstack-iac-lab-ansible, prints that path in the summary, and explains the creation/repeat/load prompts. The original ~/.ssh/openstack-iac-lab pair remains at its existing names; no move, overwrite, deletion or passphrase change is issued. Tracked preparation variables and the Kolla inventory renderer select the same new identity; SSH test inventory derives it from the script. Workload VM keys are separate and unchanged.
+
+The SSH fixtures now retain an existing forgotten pair alongside the selected key and verify its exact bytes remain intact on every run, its contents do not enter the report and its paths are never passed to SSH tools. Creation coverage checks the new filename, existing-pair coverage checks reuse, and tracked/Kolla inventory checks require the new identity. The recovery still uses the existing all-node script, public-only copy, strict host-key checks, no-password fresh login and Ansible ping without sudo. It installs no node packages and changes no disk/network/sudo policy. Native passphrase entry on Hermes and the live recovery remain pending; local fixtures do not establish SSH_READY.
+
+Stage 1 now leads with the recovery, file-effect table, exact prompt-to-credential table and one command block. Earlier diagnostic history was condensed. The report is reviewed before any host configuration. No keys, raw private reports or passphrases are published.

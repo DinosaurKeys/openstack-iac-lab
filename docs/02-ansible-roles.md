@@ -1,6 +1,6 @@
 # Stage 2 — Ansible roles, YAML inventory, and node rebuilding
 
-**Prerequisite:** complete [Stage 1's SSH-key lesson](01-openstack-foundation.md#ssh-access-for-ansible) and review `SSH_READY` before the commands below. Host inventories select `~/.ssh/openstack-iac-lab`; keep that key unlocked in Hermes's current `ssh-agent`. Key login and sudo authorization are separate.
+**Prerequisite:** complete [Stage 1's SSH-key lesson](01-openstack-foundation.md#ssh-access-for-ansible) and review `SSH_READY` before the commands below. Host inventories select `~/.ssh/openstack-iac-lab-ansible`; keep that key unlocked in Hermes's current `ssh-agent`. Key login and sudo authorization are separate.
 
 ## Why roles?
 

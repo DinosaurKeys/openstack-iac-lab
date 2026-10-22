@@ -65,7 +65,7 @@ def render(text):
     node_hosts = {f'node{i}': {'ansible_host': f'192.168.0.{199+i}'}
                   for i in range(1, 4)}
     result = {'all': {'vars': {'ansible_user': 'joe',
-                                'ansible_ssh_private_key_file': '~/.ssh/openstack-iac-lab',
+                                'ansible_ssh_private_key_file': '~/.ssh/openstack-iac-lab-ansible',
                                 'ansible_ssh_common_args': '-o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ForwardAgent=no',
                                 'ansible_become': True,
                                 'ansible_python_interpreter': '/usr/bin/python3'},

@@ -2,6 +2,61 @@
 
 **Prerequisite:** complete [Stage 1's SSH-key lesson](01-openstack-foundation.md#ssh-access-for-ansible) and review `SSH_READY` before the commands below. Host inventories select `~/.ssh/openstack-iac-lab-ansible`; keep that key unlocked in Hermes's current `ssh-agent`. Key login and sudo authorization are separate.
 
+## Check Ansible administrator access
+
+**Stage 1 host preparation, using this stage's Ansible files.** SSH already lets Hermes log in as `joe`. Installing packages and configuring system services later require administrator privileges. This check proves that Ansible can use `sudo` before we apply the common role.
+
+**The new word is `become`:** Ansible logs in as `joe`, then uses `sudo` to run the selected task as `root`. Linux identifies root with user ID **`0`**.
+
+```mermaid
+flowchart TD
+    I["YAML inventory"] --> A["Ansible on Hermes"]
+    K["Hermes private key"] --> A
+    A -->|"SSH login"| J["joe on the selected node"]
+    J -->|"sudo with joe's password"| R["root reads identity"]
+    R -->|"UID and hostname"| A
+```
+
+| Project file | Its job |
+|---|---|
+| `ansible/inventory/hosts.yml` | Lists the three node names, preserved IPs and groups |
+| `ansible/inventory/group_vars/all.yml` | Supplies the `joe` account and selected SSH key |
+| `ansible/playbooks/check-admin.yml` | YAML task list: read effective user ID and hostname, then check the results |
+| `scripts/check-admin.sh` | Runs that playbook once per selected node and saves one combined report |
+
+**Exactly what runs on each node:**
+
+| Command | Expected result | Effect |
+|---|---|---|
+| `id -u` after sudo | `0` | Reads the effective user ID |
+| `hostname -s` | `node1`, `node2` or `node3`, matching the selected host | Reads the hostname |
+
+This step installs no package and edits no node configuration. Normal Ansible temporary files and SSH/sudo logging can still occur. It uses the tracked preparation inventory; no cloud VIP, floating-IP pool or storage approval is needed for these identity reads.
+
+**Prompt:** `BECOME password:` means **that selected node's Ubuntu `joe` sudo password**. The SSH key handles login. The wrapper asks separately for node1, node2 and node3, so passwords do not have to be identical. Characters stay hidden; the entered passwords are not written into the reports.
+
+**Run on Hermes from `~/git/openstack-iac-lab`:**
+
+```bash
+git pull --ff-only
+bash scripts/check-admin.sh joe --node all
+```
+
+The summary prints at the end and is saved as **`build/admin-access-summary.txt`**. Detailed output is in `build/admin-access-report.txt`; timestamped history and the resolved inventory snapshot stay in private, ignored `build/` files.
+
+| Summary output | Meaning |
+|---|---|
+| `node1: PASSED; UID 0 and expected hostname verified` | Ansible used sudo successfully on the intended node; the same rule applies to node2/node3 |
+| `RESULT: ADMIN_ACCESS_OK for all` | All three identity checks passed |
+| A node says `FAILED`, final result `REVIEW` | Read that node's error in the detailed output; do not apply host configuration yet |
+| `STOP` before node checks | Local prerequisites or the resolved inventory did not match; no node command was attempted |
+
+An ordinary node failure is recorded and the read-only checks continue to the other selected nodes. Cancelling stops later checks. `--node node2` selects only that node for a targeted check when needed.
+
+**Stop here and share the short summary.** A pass proves Ansible's sudo access; it does not install packages or change sudo policy. The next lesson will explain the common role's packages and proposed changes before applying it. Local fixture checks pass; the actual lab result for this new check is pending.
+
+Source: [Ansible become and sudo-password prompts](https://docs.ansible.com/projects/ansible-core/devel/playbook_guide/playbooks_privilege_escalation.html).
+
 ## Why roles?
 
 A playbook describes which hosts to work on. A role packages one responsibility: tasks, templates, handlers, and defaults. Inventory says where hosts belong; group_vars contains shared settings; host_vars contains differences such as a USB NIC's MAC address.
@@ -17,6 +72,11 @@ flowchart TD
     H --> N["netplan role: render candidates on Hermes"]
     N --> R["Console review → install → netplan try"]
 ```
+
+<details>
+<summary>Later command reference: inventory, common role, Netplan and Kolla sudo</summary>
+
+Complete the current administrator-access check and review its summary before using this later reference.
 
 ## 1. Examine the supplied inventory
 
@@ -81,6 +141,8 @@ export ANSIBLE_BECOME_ASK_PASS=True
 ```
 
 Run the Kolla command normally; the underlying Ansible process prompts. Do not set this to an actual password. Alternatively, explicitly review a lab deployment-account sudo policy. Passwordless sudo is a permission choice, not a prerequisite for understanding roles.
+
+</details>
 
 ## 5. Rebuild a node without confusing the layers
 

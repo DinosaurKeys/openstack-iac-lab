@@ -1,6 +1,6 @@
 # Stage 1 — Three controllers, two computes, one Cinder LVM host
 
-**Current checkpoint:** SSH setup passed on all three nodes: `RESULT: SSH_READY for all` from the report starting `2026-10-22T06:33:11Z`. [Learn how the keys and Ansible fit together](#the-idea-hermes-proves-its-identity). Tool installation and SSH setup are complete.
+**Current checkpoint:** tools and SSH setup are complete. The report starting `2026-10-22T06:33:11Z` confirms `SSH_READY for all`. **Next: [check Ansible administrator access](02-ansible-roles.md#check-ansible-administrator-access)** before host configuration. The completed SSH lesson remains below.
 
 ## SSH access for Ansible
 

@@ -1,0 +1,26 @@
+---
+- name: Verify Ansible administrator access without configuring hosts
+  hosts: lab_nodes
+  gather_facts: false
+  become: true
+  become_user: root
+  become_method: sudo
+  tasks:
+    - name: Read the effective user ID after sudo
+      ansible.builtin.command: id -u
+      register: admin_uid
+      changed_when: false
+    - name: Read the node hostname
+      ansible.builtin.command: hostname -s
+      register: admin_hostname
+      changed_when: false
+    - name: Require root on the intended node
+      ansible.builtin.assert:
+        that:
+          - admin_uid.stdout | trim == '0'
+          - admin_hostname.stdout | trim == inventory_hostname
+        fail_msg: Administrator access or hostname did not match; review this node.
+        quiet: true
+    - name: Show the verified identity
+      ansible.builtin.debug:
+        msg: "ADMIN_OK: {{ inventory_hostname }} ({{ ansible_host }}); effective UID 0 (root)"

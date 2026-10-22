@@ -2,7 +2,7 @@
 
 Three controllers on Ubuntu 24.04, Cinder LVM, Ansible, Terraform, an application, and monitoring.
 
-**Current step: Stage 1 — SSH access complete; understand the key flow.** Hermes keeps the private key; all three nodes received its public key. [Read the beginner lesson and diagram](docs/01-openstack-foundation.md#the-idea-hermes-proves-its-identity). The successful setup does not need repeating.
+**Current step: Stage 1 — check Ansible administrator access.** SSH login is complete. Next, verify that Ansible can use `sudo` as `joe` on all three nodes, using only identity reads. [Read the short lesson, diagram and one script command](docs/02-ansible-roles.md#check-ansible-administrator-access). No package installation is part of this check.
 
 **Latest observed result:** the SSH report starting `2026-10-22T06:33:11Z` ends with `RESULT: SSH_READY for all`. The new `~/.ssh/openstack-iac-lab-ansible` pair was created and loaded; each node received one public key, accepted a fresh key-only login as `joe`, and returned Ansible `pong`. Sudo policy is unchanged; this run did not test privilege escalation or deploy OpenStack. Hermes tools remain ready (`TOOLS_FOUND`).
 
@@ -45,6 +45,8 @@ Follow this table **from top to bottom**, reviewing the result at each stop. Com
 | 3 · Stage 0 — **links done; allocation details pending** | Record no static users in `.150–.199`; settle pool size and `.100` DHCP binding | Three external IPs are smaller than the five-address coexistence budget | No repeat ping/link test; final cloud inputs wait for the outstanding facts |
 | 4 · Stage 1 — **done** | Resume collections completed; short summary reviewed | Finish collection installation and verify Python dependencies/tool locations | All phases COMPLETED; RESULT TOOLS_FOUND |
 | 5 · Stages 1 + 2 — **SSH done** | One public key added per node; fresh key login and Ansible Python checks passed | Let Ansible connect as `joe` using Hermes's selected private key | SSH_READY for all observed; host preparation follows input review |
+| 5a · Stage 1 — **current** | `check-admin.sh joe --node all` | Verify Ansible sudo access with `id -u` and the expected hostname, using a separate password prompt per node | Review the short summary; require ADMIN_ACCESS_OK for all |
+| 5b · Stages 1 + 2 — later | Review the common role, its package list and preview before applying it | Prepare host packages, names and time synchronization | Reviewed changes and repeatable common-role result |
 | 6 · Stages 1 + 2 | `labctl netplan`, then the console procedure in Stage 2, one node at a time | Bind each USB MAC to `ext0` and retain the original management address | SSH, DNS, default route and provider link checked |
 | 7 · Stage 1 | `labctl --ask-become-pass storage` | Create **one** `cinder-volumes` VG on the reviewed blank node3 SATA disk | node3 SATA owns Cinder; Ubuntu VG stays separate |
 | 8 · Stage 1 | `labctl init-config`, then the Kolla phases below | Deploy the control, networking, compute and volume services | Kolla checks and service lists pass |
@@ -101,7 +103,7 @@ For `first`, `app` or `monitor`, run `python scripts/labctl.py terraform NAME AC
 | Reviewed node3 disk reuse and unresolved diagnostic limitations | Deleting Ceph does not repair hardware or resolve a failed NVMe log query |
 | Non-overlapping tenant CIDRs, HCP organization/workspaces and scoped cloud credentials | These depend on your network and accounts |
 
-**Current checkpoint: row 5 complete.** The [key-flow lesson](docs/01-openstack-foundation.md#the-idea-hermes-proves-its-identity) explains private/public keys, the agent, blank passphrases and your successful output. Review remaining host-configuration inputs before later configure/preflight/base and Netplan steps.
+**Current checkpoint: row 5a, administrator-access check.** Follow the [sudo lesson](docs/02-ansible-roles.md#check-ansible-administrator-access), run its one wrapper on Hermes, and share `build/admin-access-summary.txt`. The tracked preparation inventory is sufficient for these identity reads; later network/storage/cloud configuration still needs its reviewed inputs.
 
 <details>
 <summary>Reference: first checkout and initial discovery</summary>
